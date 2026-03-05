@@ -1,0 +1,213 @@
+{
+  "Engine": "Identity Governance Validation Engine",
+  "GeneratedAt": "2026-03-05T11:18:11Z",
+  "Tenant": "demo-tenant",
+  "TotalEntitiesEvaluated": 10,
+  "EntityRiskStates": [
+    {
+      "EntityId": "SP-01",
+      "EntityType": "ServicePrincipal",
+      "ComplianceStatus": "Blocking",
+      "RiskLevel": "Critical",
+      "RiskScore": 11.1,
+      "RiskScoreRaw": 100,
+      "RiskDensity": 11.1,
+      "ViolationCount": 1,
+      "HygieneIssueCount": 0,
+      "HasBlocking": true,
+      "HasCriticalSeverity": true,
+      "RecommendedAction": "Escalate",
+      "Findings": [
+        {
+          "EntityId": "SP-01",
+          "EntityType": "ServicePrincipal",
+          "RuleId": "RBAC-003",
+          "Category": "RBAC",
+          "Severity": "Critical",
+          "Weight": 100,
+          "Blocking": true,
+          "Details": "[ServicePrincipal] Forbidden role 'Owner' at '/subscriptions/sub-ID01' (Type: Subscription, Sub:01).",
+          "Timestamp": "2026-03-04T10:45:10.0779380Z",
+          "Mode": "FullScan"
+        }
+      ]
+    },
+    {
+      "EntityId": "Group03",
+      "EntityType": "Group",
+      "ComplianceStatus": "NonCompliant",
+      "RiskLevel": "Medium",
+      "RiskScore": 8.3,
+      "RiskScoreRaw": 75,
+      "RiskDensity": 8.3,
+      "ViolationCount": 1,
+      "HygieneIssueCount": 0,
+      "HasBlocking": false,
+      "HasCriticalSeverity": false,
+      "RecommendedAction": "Alert",
+      "Findings": [
+        {
+          "EntityId": "Group03",
+          "EntityType": "Group",
+          "RuleId": "RBAC-002",
+          "Category": "RBAC",
+          "Severity": "High",
+          "Weight": 75,
+          "Blocking": false,
+          "Details": "[Group] Privileged role 'Contributor' at broad scope '/subscriptions/sub02' (Type: Subscription). Must be resource-group level or below.",
+          "Timestamp": "2026-03-04T10:45:10.0650330Z",
+          "Mode": "FullScan"
+        }
+      ]
+    },
+    {
+      "EntityId": "user-001",
+      "EntityType": "User",
+      "RiskScore": 45,
+      "ComplianceState": "NonCompliant",
+      "LastSignIn": "2026-01-04T11:18:11Z",
+      "Findings": [
+        {
+          "RuleId": "HYG-002",
+          "Description": "User inactive for 120 days"
+        },
+        {
+          "RuleId": "ACCESS-004",
+          "Description": "Direct RBAC assignment detected"
+        }
+      ]
+    },
+    {
+      "EntityId": "group-001",
+      "EntityType": "Group",
+      "RiskScore": 25,
+      "ComplianceState": "Compliant",
+      "LastSignIn": "2026-01-04T11:18:11Z",
+      "Findings": [
+        {
+          "RuleId": "GOV-003",
+          "Description": "Group contains external guest members"
+        }
+      ]
+    },
+    {
+      "EntityId": "user-004",
+      "EntityType": "User",
+      "RiskScore": 27,
+      "ComplianceState": "Compliant",
+      "LastSignIn": "2026-02-03T11:18:11Z",
+      "Findings": [
+        {
+          "RuleId": "HYG-002",
+          "Description": "Inactivity detected"
+        },
+        {
+          "RuleId": "ACCESS-004",
+          "Description": "Direct access assignment observed"
+        }
+      ]
+    },
+    {
+      "EntityId": "serviceprincipal-005",
+      "EntityType": "ServicePrincipal",
+      "RiskScore": 40,
+      "ComplianceState": "NonCompliant",
+      "LastSignIn": "2025-11-05T11:18:11Z",
+      "Findings": [
+        {
+          "RuleId": "HYG-002",
+          "Description": "Inactivity detected"
+        },
+        {
+          "RuleId": "ACCESS-004",
+          "Description": "Direct access assignment observed"
+        }
+      ]
+    },
+    {
+      "EntityId": "group-006",
+      "EntityType": "Group",
+      "RiskScore": 42,
+      "ComplianceState": "NonCompliant",
+      "LastSignIn": "2025-11-05T11:18:11Z",
+      "Findings": [
+        {
+          "RuleId": "HYG-002",
+          "Description": "Inactivity detected"
+        },
+        {
+          "RuleId": "ACCESS-004",
+          "Description": "Direct access assignment observed"
+        }
+      ]
+    },
+    {
+      "EntityId": "user-007",
+      "EntityType": "User",
+      "RiskScore": 69,
+      "ComplianceState": "NonCompliant",
+      "LastSignIn": "2026-01-04T11:18:11Z",
+      "Findings": [
+        {
+          "RuleId": "HYG-002",
+          "Description": "Inactivity detected"
+        },
+        {
+          "RuleId": "ACCESS-004",
+          "Description": "Direct access assignment observed"
+        }
+      ]
+    },
+    {
+      "EntityId": "serviceprincipal-008",
+      "EntityType": "ServicePrincipal",
+      "RiskScore": 68,
+      "ComplianceState": "NonCompliant",
+      "LastSignIn": "2026-02-03T11:18:11Z",
+      "Findings": [
+        {
+          "RuleId": "HYG-002",
+          "Description": "Inactivity detected"
+        },
+        {
+          "RuleId": "ACCESS-004",
+          "Description": "Direct access assignment observed"
+        }
+      ]
+    },
+    {
+      "EntityId": "group-009",
+      "EntityType": "Group",
+      "RiskScore": 49,
+      "ComplianceState": "NonCompliant",
+      "LastSignIn": "2026-02-03T11:18:11Z",
+      "Findings": [
+        {
+          "RuleId": "HYG-002",
+          "Description": "Inactivity detected"
+        },
+        {
+          "RuleId": "ACCESS-004",
+          "Description": "Direct access assignment observed"
+        }
+      ]
+    },
+    {
+      "EntityId": "user-010",
+      "EntityType": "User",
+      "RiskScore": 21,
+      "ComplianceState": "Compliant",
+      "LastSignIn": "2026-02-03T11:18:11Z",
+      "Findings": [
+        {
+          "RuleId": "HYG-002",
+          "Description": "Inactivity detected"
+        },
+        {
+          "RuleId": "ACCESS-004",
+          "Description": "Direct access assignment observed"
+        }
+      ]
+    }
+  ]
+}
