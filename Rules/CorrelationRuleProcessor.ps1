@@ -15,25 +15,8 @@
 
 Set-StrictMode -Version Latest
 
-# ---------------------------------------------------------------------------
-# Correlation Engine Architecture
-#
-# Evaluates identity + RBAC relationships that cannot be detected from
-# either dataset independently.
-#
-# Pipeline:
-#   1. Build RBAC lookup index (PrincipalId → assignments)
-#   2. Iterate identities
-#   3. Evaluate rule conditions using RBAC + identity context
-#   4. Emit ComplianceFinding objects
-# ---------------------------------------------------------------------------
-
 $Script:CorrelationCategories = @('Correlation')
 
-# ---------------------------------------------------------------------------
-# Build RBAC lookup index: PrincipalId → list of assignments.
-# Avoids repeatedly scanning the RBAC dataset for each identity.
-# ---------------------------------------------------------------------------
 
 function Build-CorrelationRbacIndex {
     [OutputType([hashtable])]
@@ -42,21 +25,15 @@ function Build-CorrelationRbacIndex {
     $index = [hashtable]::new([System.StringComparer]::OrdinalIgnoreCase)
 
     foreach ($a in $RbacSnapshot.RoleAssignments) {
-
         if (-not $index.ContainsKey($a.PrincipalId)) {
             $index[$a.PrincipalId] = [System.Collections.Generic.List[PSCustomObject]]::new()
         }
-
         $index[$a.PrincipalId].Add($a)
     }
 
     return $index
 }
 
-# ---------------------------------------------------------------------------
-# Core correlation evaluator.
-# Rule behaviour is driven entirely by parameters in Rules.json.
-# ---------------------------------------------------------------------------
 
 function Evaluate-CrossPlaneExposure {
     [OutputType([System.Collections.Generic.List[PSCustomObject]])]
@@ -64,37 +41,70 @@ function Evaluate-CrossPlaneExposure {
         [Parameter(Mandatory)] [PSCustomObject] $Rule,
         [Parameter(Mandatory)] [PSCustomObject] $IdentitySnapshot,
         [Parameter(Mandatory)] [PSCustomObject] $RbacSnapshot,
-        [Parameter(Mandatory)] [hashtable]      $RbacIndex
+        [Parameter(Mandatory)] [hashtable]      $RbacIndex,
+
+        # RulesDocument is needed to read the privileged flag on entitlement model groups.
+        # The user snapshot's IsPrivileged flag is set by the collector using tier-based logic only.
+        # Groups like SG_Security_Core (tier: Base, privileged: true) would be missed without this.
+        [Parameter()] [PSCustomObject] $RulesDocument = $null
     )
 
     $findings = [System.Collections.Generic.List[PSCustomObject]]::new()
     $p        = $Rule.parameters
     $now      = [datetime]::UtcNow
 
+    # Build a set of group IDs that are explicitly marked privileged in the entitlement model.
+    # This is used alongside $user.IsPrivileged to produce the correct privileged identity check
+    # for CORR-001 and CORR-004. Without this, a Security Engineer in SG_Security_Core would
+    # never trigger those rules because their tier is Base, not Manager.
+    $entitlementPrivGroupIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    if ($null -ne $RulesDocument -and $RulesDocument.PSObject.Properties['entitlementModel'] -and
+        $null -ne $RulesDocument.entitlementModel.groups) {
+
+        # Map display name to GroupId so we can look up by ObjectId later
+        $groupDisplayToId = @{}
+        foreach ($g in $IdentitySnapshot.Groups) {
+            $groupDisplayToId[$g.DisplayName] = $g.GroupId
+        }
+
+        foreach ($prop in $RulesDocument.entitlementModel.groups.PSObject.Properties) {
+            if ($prop.Value.PSObject.Properties['privileged'] -and $prop.Value.privileged -eq $true) {
+                if ($groupDisplayToId.ContainsKey($prop.Name)) {
+                    [void]$entitlementPrivGroupIds.Add($groupDisplayToId[$prop.Name])
+                }
+            }
+        }
+    }
+
     foreach ($user in $IdentitySnapshot.Users) {
 
-        # Lookup RBAC assignments for this identity
         $userAssignments = @()
         if ($RbacIndex.ContainsKey($user.UserId)) {
             $userAssignments = $RbacIndex[$user.UserId]
         }
 
-        # ================================================================
+        # Resolve the user's group memberships once per user — needed for the privilege check below.
+        $userGroupIds = @()
+        if ($IdentitySnapshot.MembershipMap.ContainsKey($user.UserId)) {
+            $userGroupIds = $IdentitySnapshot.MembershipMap[$user.UserId]
+        }
+
+        # Determine whether this user is privileged using both the snapshot flag and the
+        # entitlement model flag. The snapshot flag alone is insufficient because it only
+        # reflects tier-based privilege, not the explicit privileged:true on Base-tier groups.
+        $isPrivilegedUser = ($user.PSObject.Properties['IsPrivileged'] -and $user.IsPrivileged) -or
+            ($userGroupIds | Where-Object { $entitlementPrivGroupIds.Contains($_) }).Count -gt 0
+
+
         # CORR-001
-        # Privileged identity holding high-risk subscription RBAC roles
-        # ================================================================
+        # Privileged identity holding a high-risk RBAC role at subscription scope.
+        # Both conditions must be true at once — this is the cross-plane exposure that
+        # neither the identity processor nor the RBAC processor can detect independently.
         if ($p.PSObject.Properties['requirePrivilegedTier'] -and $p.requirePrivilegedTier `
             -and $p.PSObject.Properties['forbiddenRoles'] -and $p.PSObject.Properties['forbiddenScopes']) {
 
-            # Guard against schema drift if IsPrivileged flag is missing
-            if (-not $user.PSObject.Properties['IsPrivileged']) {
-                Write-Debug "CorrelationProcessor: User '$($user.UserId)' missing IsPrivileged flag."
-                continue
-            }
+            if (-not $isPrivilegedUser) { continue }
 
-            if (-not $user.IsPrivileged) { continue }
-
-            # Detect high-risk subscription scope assignments
             $dangerousAssignments = $userAssignments | Where-Object {
                 $a = $_
                 ($p.forbiddenRoles -contains $a.RoleDefinitionName) -and
@@ -117,18 +127,17 @@ function Evaluate-CrossPlaneExposure {
             continue
         }
 
-        # ================================================================
+
         # CORR-002
-        # Disabled identity retaining active RBAC permissions
-        # ================================================================
+        # Disabled account with active RBAC assignments.
+        # A disabled account should have no remaining Azure permissions — any RBAC left
+        # behind after disabling is residual access that needs to be cleaned up.
         if ($p.PSObject.Properties['requireEnabled'] -and $p.requireEnabled `
             -and $p.PSObject.Properties['requireActiveRbac'] -and $p.requireActiveRbac) {
 
             if (-not $user.AccountEnabled -and $userAssignments.Count -gt 0) {
-
                 $roleList = ($userAssignments |
                     Select-Object -ExpandProperty RoleDefinitionName -Unique) -join ', '
-
                 $findings.Add((New-ComplianceFinding `
                     -EntityId   $user.UserId `
                     -EntityType 'User' `
@@ -143,15 +152,14 @@ function Evaluate-CrossPlaneExposure {
             continue
         }
 
-        # ================================================================
+
         # CORR-003
-        # Non-FTE identities assigned privileged RBAC roles
-        # ================================================================
+        # Non-FTE holding a privileged RBAC role.
+        # Contractors and interns should not hold Owner, Contributor, or UAA — these are
+        # permanent employee roles. This fires regardless of group membership.
         if ($p.PSObject.Properties['restrictedEmploymentTypes'] -and $p.PSObject.Properties['privilegedRoles']) {
 
-            # Normalise EmployeeType values from HR / directory sync
-            $rawType = ($user.EmployeeType ?? '').Trim()
-
+            $rawType  = ($user.EmployeeType ?? '').Trim()
             $normType = switch -Regex ($rawType.ToLower()) {
                 '^full.?time$' { 'Full-time'  }
                 '^intern$'     { 'Intern'     }
@@ -159,7 +167,6 @@ function Evaluate-CrossPlaneExposure {
                 default        { $rawType }
             }
 
-            # Missing EmployeeType handled by identity rules
             if ([string]::IsNullOrWhiteSpace($normType)) { continue }
 
             $isRestricted = $p.restrictedEmploymentTypes -contains $normType
@@ -183,21 +190,17 @@ function Evaluate-CrossPlaneExposure {
             continue
         }
 
-        # ================================================================
+
         # CORR-004
-        # Privileged identity with direct RBAC assignment
-        # ================================================================
+        # Privileged identity with a direct (non-group-based) RBAC assignment.
+        # All RBAC should be group-based. A privileged identity with direct assignment
+        # bypasses group governance and is harder to audit. Suppressed by CORR-001
+        # when the higher-severity cross-plane rule already fires for the same entity.
         if ($p.PSObject.Properties['requirePrivilegedTier'] -and $p.requirePrivilegedTier `
             -and $p.PSObject.Properties['assignmentType']) {
 
-            if (-not $user.PSObject.Properties['IsPrivileged']) {
-                Write-Debug "CorrelationProcessor: User '$($user.UserId)' missing IsPrivileged flag."
-                continue
-            }
+            if (-not $isPrivilegedUser) { continue }
 
-            if (-not $user.IsPrivileged) { continue }
-
-            # Normalise assignment type to collector values
             $targetAssignmentType = if ($p.assignmentType -eq 'User') { 'Direct' } else { $p.assignmentType }
 
             $directAssignments = $userAssignments |
@@ -218,10 +221,11 @@ function Evaluate-CrossPlaneExposure {
             continue
         }
 
-        # ================================================================
+
         # CORR-005
-        # Dormant identity retaining RBAC permissions
-        # ================================================================
+        # Dormant account that still holds RBAC roles.
+        # Inactive accounts with permissions are a standing lateral movement opportunity —
+        # they won't trigger sign-in risk alerts because they never sign in.
         if ($p.PSObject.Properties['maxInactiveDays'] -and $p.PSObject.Properties['requireActiveRbac'] -and $p.requireActiveRbac) {
 
             if ($userAssignments.Count -eq 0) { continue }
@@ -238,7 +242,6 @@ function Evaluate-CrossPlaneExposure {
             }
 
             if ($isStale) {
-
                 $roleList = ($userAssignments |
                     Select-Object -ExpandProperty RoleDefinitionName -Unique) -join ', '
 
@@ -267,25 +270,21 @@ function Evaluate-CrossPlaneExposure {
     return $findings
 }
 
-# ---------------------------------------------------------------------------
-# Rule dispatch table (rule.type → evaluator)
-# ---------------------------------------------------------------------------
 
+# Dispatch table — RulesDocument ($doc) is now forwarded to Evaluate-CrossPlaneExposure
+# so CORR-001 and CORR-004 can read the privileged flag from the entitlement model.
 $Script:CorrelationDispatch = @{
     'Evaluate-CrossPlaneExposure' = {
         param($r, $identSnap, $rbacSnap, $rbacIndex, $doc)
-
         Evaluate-CrossPlaneExposure `
-            -Rule $r `
+            -Rule             $r `
             -IdentitySnapshot $identSnap `
-            -RbacSnapshot $rbacSnap `
-            -RbacIndex $rbacIndex
+            -RbacSnapshot     $rbacSnap `
+            -RbacIndex        $rbacIndex `
+            -RulesDocument    $doc
     }
 }
 
-# ---------------------------------------------------------------------------
-# Engine entry point for correlation rule execution
-# ---------------------------------------------------------------------------
 
 function Invoke-CorrelationRuleEngine {
 
@@ -300,10 +299,8 @@ function Invoke-CorrelationRuleEngine {
 
     $allFindings = [System.Collections.Generic.List[PSCustomObject]]::new()
 
-    # Build RBAC index once for this engine run
     $rbacIndex = Build-CorrelationRbacIndex -RbacSnapshot $RbacSnapshot
 
-    # Select only correlation rules from Rules.json
     $rules = $RulesDocument.rules |
         Where-Object { $Script:CorrelationCategories -contains $_.category }
 
@@ -315,7 +312,6 @@ function Invoke-CorrelationRuleEngine {
         }
 
         try {
-
             $results = & $Script:CorrelationDispatch[$rule.type] `
                 $rule $IdentitySnapshot $RbacSnapshot $rbacIndex $RulesDocument
 
@@ -328,12 +324,10 @@ function Invoke-CorrelationRuleEngine {
         }
     }
 
-    # -------------------------------------------------------------------
-    # Suppression pass removes overlapping findings between rules
-    # -------------------------------------------------------------------
-
+    # Remove findings superseded by a more specific rule firing on the same entity.
+    # Suppression chains are declared in Rules.json — no hardcoded logic here.
     $allFindings = Invoke-SuppressionPass `
-        -Findings $allFindings `
+        -Findings      $allFindings `
         -RulesDocument $RulesDocument
 
     return $allFindings

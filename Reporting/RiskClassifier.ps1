@@ -51,7 +51,7 @@ function Get-EntityRiskAggregate {
         [Parameter()]          [System.Collections.Generic.List[PSCustomObject]] $EntityFindings = [System.Collections.Generic.List[PSCustomObject]]::new()
     )
 
-    # -------- Separate compliance findings from hygiene findings -----------------
+    # Separate compliance findings from hygiene findings 
     # Non-blocking HYG-* findings (inactivity, stale passwords) are operational
     # health signals. They contribute to the risk score but do NOT gate
     # ComplianceStatus — an inactive account is not a compliance failure.
@@ -83,14 +83,14 @@ function Get-EntityRiskAggregate {
     # Hygiene score added to raw total (informational — not compliance gated)
     foreach ($f in $hygieneFindings) { $riskScoreRaw += $f.Weight }
 
-    # ------------ Normalise score to 0–100 ----------------
+    # Normalise score to 0–100 
     # Fixed theoretical maximum: worst-case single entity stacking all critical rules.
     # Using a fixed constant keeps scores comparable across tenants and over time.
     # Tenant-relative normalisation (score/tenant-max) would compress clean tenants.
     $theoreticalMax = 900
     $riskScore = [Math]::Min([Math]::Round(($riskScoreRaw / $theoreticalMax) * 100, 1), 100.0)
 
-    # ------------ Risk density -------------------------
+    # Risk density 
     # Distinguishes few severe violations from many minor ones.
     # High density = concentrated critical risk. Low density = broad surface area.
     $totalViolations = $EntityFindings.Count
@@ -98,7 +98,7 @@ function Get-EntityRiskAggregate {
         [Math]::Round($riskScore / $totalViolations, 2)
     } else { 0.0 }
 
-    # ------------  ComplianceStatus — gated on compliance findings only ----------------- 
+    # ComplianceStatus — gated on compliance findings only
     $complianceStatus = if ($violationCount -eq 0) {
         'Compliant'
     } elseif ($hasBlocking) {
@@ -107,7 +107,7 @@ function Get-EntityRiskAggregate {
         'NonCompliant'
     }
 
-    # ------------------ RiskLevel — informational, uses full finding set -----------------
+    # RiskLevel — informational, uses full finding set
     $anyBlocking    = $EntityFindings | Where-Object { $_.Blocking }
     $anyCriticalSev = $EntityFindings | Where-Object { $_.Severity -eq 'Critical' }
 
@@ -123,14 +123,14 @@ function Get-EntityRiskAggregate {
         'Medium'
     }
 
-    # -------------- RecommendedAction ---------------
+    # RecommendedAction 
     $recommendedAction = switch ($complianceStatus) {
         'Compliant'    { if ($hygieneFindings.Count -gt 0) { 'HygieneReview' } else { 'None' } }
         'Blocking'     { 'Escalate' }
         'NonCompliant' { if ($hasCriticalSev) { 'Review' } else { 'Alert' } }
     }
 
-    # ------------- Invariant guard ---------------------
+    # Invariant guard
     if ($complianceStatus -eq 'Compliant' -and $violationCount -gt 0) {
         throw "ClassifierInvariantViolation: EntityId='$EntityId' ComplianceStatus=Compliant but ViolationCount=$violationCount."
     }

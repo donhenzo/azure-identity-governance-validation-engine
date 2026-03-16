@@ -21,12 +21,10 @@ Set-StrictMode -Version Latest
 
 $Script:RbacCategories = @('RBAC')
 
-# ---------------------------------------------------------------------------
+
 # Resolve-RbacEntityType
 # Maps RBAC PrincipalType values to ComplianceFinding EntityType schema values.
 # Managed Identities appear as ServicePrincipal in the RBAC API.
-# ---------------------------------------------------------------------------
-
 function Resolve-RbacEntityType {
     [OutputType([string])]
     param(

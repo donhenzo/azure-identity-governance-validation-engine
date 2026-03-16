@@ -73,7 +73,6 @@ function New-ComplianceFinding {
 }
 
 
-# ---------------------------------------------------------------------------
 # Invoke-SuppressionPass
 # Post-processing step called by every rule orchestrator after all rules run.
 # Reads suppressesOnMatch from Rules.json and removes findings for rules that
@@ -86,7 +85,7 @@ function New-ComplianceFinding {
 # Contract:
 #   suppressesOnMatch: ["HYG-001"] on HYG-002 means:
 #     for every EntityId where HYG-002 fired, remove all HYG-001 findings.
-# ---------------------------------------------------------------------------
+
 
 function Invoke-SuppressionPass {
     [OutputType([System.Collections.Generic.List[PSCustomObject]])]

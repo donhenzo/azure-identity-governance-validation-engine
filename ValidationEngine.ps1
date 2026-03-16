@@ -73,10 +73,8 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-# ---------------------------------------------------------------------------
-# Source all layers
-# ---------------------------------------------------------------------------
 
+# Source all layers
 $root = $PSScriptRoot
 
 . (Join-Path $root 'Collectors' 'IDCollector.ps1')
@@ -88,10 +86,8 @@ $root = $PSScriptRoot
 . (Join-Path $root 'Reporting' 'RiskClassifier.ps1')
 . (Join-Path $root 'Reporting' 'ReportGen.ps1')
 
-# ---------------------------------------------------------------------------
-# Validate
-# ---------------------------------------------------------------------------
 
+# Validate
 if ($Mode -eq 'PreProvision' -and [string]::IsNullOrWhiteSpace($TargetUserId)) {
     throw 'ValidationEngine: -TargetUserId is required for PreProvision mode.'
 }
@@ -102,15 +98,14 @@ if (-not (Test-Path -LiteralPath $RulesPath)) {
 
 Write-Verbose "ValidationEngine: [$Mode] starting at $(Get-Date -Format 'o')"
 
-# ---------------------------------------------------------------------------
+
 # Load rules once — shared across all processors
-# ---------------------------------------------------------------------------
+
 
 $rulesDocument = Get-Content -LiteralPath $RulesPath -Raw | ConvertFrom-Json
 
-# ---------------------------------------------------------------------------
+
 # STEP 1 — Identity collection
-# ---------------------------------------------------------------------------
 
 Write-Verbose 'ValidationEngine: [1/5] Collecting identity data...'
 
@@ -164,9 +159,8 @@ if ($identitySnapshot.Users.Count -eq 0) {
 
 Write-Verbose "ValidationEngine: $($identitySnapshot.Users.Count) users, $($identitySnapshot.Groups.Count) groups collected."
 
-# ---------------------------------------------------------------------------
+
 # STEP 2 — RBAC collection (skip for PreProvision — no subscription scan needed)
-# ---------------------------------------------------------------------------
 
 $rbacSnapshot = $null
 
@@ -184,9 +178,9 @@ else {
     }
 }
 
-# ---------------------------------------------------------------------------
+
 # STEP 3 — Rule evaluation (all three processors)
-# ---------------------------------------------------------------------------
+
 
 Write-Verbose 'ValidationEngine: [3/5] Running rule processors...'
 
@@ -218,9 +212,8 @@ if ($Mode -ne 'PreProvision') {
 
 Write-Verbose "ValidationEngine: Total findings before classification: $($allFindings.Count)"
 
-# ---------------------------------------------------------------------------
+
 # STEP 4 — Risk classification
-# ---------------------------------------------------------------------------
 
 Write-Verbose 'ValidationEngine: [4/5] Classifying risk...'
 
@@ -257,12 +250,12 @@ else {
 
 $classificationResult = Invoke-RiskClassification @classifyParams
 
-# ---------------------------------------------------------------------------
+
 # Build enrichment lookup table — EntityId → human-readable context
 # Used by the report layer to produce readable CSV/JSON output.
 # Built here because this is the only point where identity snapshot,
 # RBAC snapshot, membership map, and classification results all coexist.
-# ---------------------------------------------------------------------------
+
 
 $enrichmentMap = [hashtable]::new([System.StringComparer]::OrdinalIgnoreCase)
 
@@ -373,9 +366,9 @@ foreach ($rs in $classificationResult.EntityRiskStates) {
     }
 }
 
-# ---------------------------------------------------------------------------
+
 # STEP 5 — Report
-# ---------------------------------------------------------------------------
+
 
 Write-Verbose 'ValidationEngine: [5/5] Generating report...'
 

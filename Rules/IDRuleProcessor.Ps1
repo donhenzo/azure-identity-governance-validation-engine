@@ -1,34 +1,19 @@
 <#
 .SYNOPSIS
     IDRuleProcessor.ps1 — Evaluates identity-plane rules from Rules.json.
-
 .DESCRIPTION
     Reads rules where category is: Identity | Access | Architecture | Hygiene
     Operates only on the IdentitySnapshot from IDCollector.
     No Azure/RBAC data touched here.
-
     Returns a flat list of ComplianceFinding objects.
     No aggregation. No console output. No risk scoring.
-
 .NOTES
     Dot-source FindingSchema.ps1 before calling Invoke-IdentityRuleEngine.
 #>
-
 Set-StrictMode -Version Latest
 
-# Categories owned by this processor (identity-plane only)
 $Script:IdentityCategories = @('Identity', 'Access', 'Architecture', 'Hygiene')
 
-# ---------------------------------------------------------------------------
-# Evaluate-EmploymentAlignment
-# Identity hygiene & lifecycle governance checks:
-#   - UPN naming standards
-#   - Employment status validation
-#   - Terminated users with residual access
-#   - Job title vs group membership conflicts
-#   - Inactivity thresholds
-#   - Password age compliance
-# ---------------------------------------------------------------------------
 
 function Evaluate-EmploymentAlignment {
     [OutputType([System.Collections.Generic.List[PSCustomObject]])]
@@ -41,27 +26,21 @@ function Evaluate-EmploymentAlignment {
     $p        = $Rule.parameters
     $now      = [datetime]::UtcNow
 
-    # ── Joiner-scoped rules ───────────────────────────────────────────────────
-    # JOIN rules apply the same checks as their non-JOIN counterparts but are
-    # scoped to users whose CreatedDateTime is within the joiner window.
-    # This lets the engine catch provisioning errors at point-of-join rather
-    # than surfacing them only in FullScan hygiene cycles.
-    # joinerCheck = false means evaluate all users (standard rule behaviour).
-    $isJoinerRule   = $p.PSObject.Properties['joinerCheck'] -and $p.joinerCheck
+    # JOIN rules scope evaluation to recently created accounts only.
+    # joinerCheck = false means the rule applies to all users regardless of age.
+    $isJoinerRule     = $p.PSObject.Properties['joinerCheck'] -and $p.joinerCheck
     $joinerWindowDays = if ($p.PSObject.Properties['joinerWindowDays']) { [int]$p.joinerWindowDays } else { 30 }
 
     foreach ($user in $IdentitySnapshot.Users) {
 
-        # Gate joiner rules to users created within the onboarding window.
-        # Users with null CreatedDateTime are included — missing creation date
-        # on a new account is itself a data quality issue worth catching.
         if ($isJoinerRule) {
+            # Users with no CreatedDateTime are included — missing creation date on a new account is a data quality problem worth catching.
             $isNewJoiner = $null -eq $user.CreatedDateTime -or
                 ($now - [datetime]$user.CreatedDateTime).TotalDays -le $joinerWindowDays
             if (-not $isNewJoiner) { continue }
         }
 
-        # Validate UPN naming standard
+        # UPN format validation
         if ($p.PSObject.Properties['validationPattern'] -and $p.field -eq 'UserPrincipalName') {
             $upn = $user.UserPrincipalName
             if ([string]::IsNullOrWhiteSpace($upn) -or $upn -notmatch $p.validationPattern) {
@@ -78,14 +57,12 @@ function Evaluate-EmploymentAlignment {
             continue
         }
 
-        # Validate employment status field consistency
+        # Employment status check — expects Active
         if ($p.PSObject.Properties['requiredValue'] -and $p.field -eq 'EmploymentStatus') {
             $status = $user.EmploymentStatus
 
-            # Unknown employment — emits distinct message when unknownTrigger is set.
-            # IDENT-003 owns this branch entirely. IDENT-004 has been removed.
-            # continue ensures only one finding fires per user — Unknown takes precedence
-            # over the generic not-Active check so the message stays precise.
+            # Unknown is treated separately so the finding message is precise about the cause.
+            # Both Unknown and non-Active are policy violations but for different reasons.
             if ($p.PSObject.Properties['unknownTrigger'] -and $p.unknownTrigger -and $status -eq 'Unknown') {
                 $findings.Add((New-ComplianceFinding `
                     -EntityId   $user.UserId `
@@ -99,7 +76,6 @@ function Evaluate-EmploymentAlignment {
                 continue
             }
 
-            # Employment status mismatch (non-Active, non-Unknown)
             if ($status -ne $p.requiredValue) {
                 $findings.Add((New-ComplianceFinding `
                     -EntityId   $user.UserId `
@@ -114,7 +90,7 @@ function Evaluate-EmploymentAlignment {
             continue
         }
 
-        # Terminated users still holding group memberships
+        # Terminated users who still have group memberships
         if ($p.PSObject.Properties['terminatedStatuses']) {
             if ($p.terminatedStatuses -contains $user.EmploymentStatus) {
                 $userGroupIds = @()
@@ -139,7 +115,7 @@ function Evaluate-EmploymentAlignment {
             continue
         }
 
-        # Job title conflicts with forbidden group memberships
+        # Job title conflicts — certain titles should never appear in certain groups
         if ($p.PSObject.Properties['jobTitlePatterns'] -and $p.PSObject.Properties['forbiddenGroupPatterns']) {
             $titleMatch = $p.jobTitlePatterns | Where-Object { $user.JobTitle -and $user.JobTitle -match $_ }
             if ($titleMatch) {
@@ -169,7 +145,7 @@ function Evaluate-EmploymentAlignment {
             continue
         }
 
-        # Account inactivity threshold enforcement
+        # Account inactivity — how long since last sign-in
         if ($p.PSObject.Properties['maxInactiveDays'] -and $p.field -eq 'LastSignInDateTime') {
             $lastSignIn = $user.LastSignInDateTime
             if ($null -eq $lastSignIn) {
@@ -185,7 +161,7 @@ function Evaluate-EmploymentAlignment {
             }
             else {
                 $daysSince = ($now - [datetime]$lastSignIn).Days
-                if ($daysSince -ge $p.maxInactiveDays) {  # -ge: day 180 itself meets the threshold
+                if ($daysSince -ge $p.maxInactiveDays) {
                     $findings.Add((New-ComplianceFinding `
                         -EntityId   $user.UserId `
                         -EntityType 'User' `
@@ -200,7 +176,7 @@ function Evaluate-EmploymentAlignment {
             continue
         }
 
-        # Password age policy enforcement
+        # Password age — how long since last password change
         if ($p.PSObject.Properties['maxAgeDays'] -and $p.field -eq 'LastPasswordChangeDateTime') {
             $lastChange = $user.LastPasswordChangeDateTime
             if ($null -ne $lastChange) {
@@ -224,31 +200,47 @@ function Evaluate-EmploymentAlignment {
     return $findings
 }
 
-# ---------------------------------------------------------------------------
-# Evaluate-PrivilegeDrift
-# Privileged access governance:
-#   - Disabled privileged accounts
-#   - MFA enforcement for privileged identities
-#   - Tier-0 isolation enforcement
-#   - Mixed privilege memberships
-#   - Admin account misuse (dual-use)
-#   - Service accounts in interactive groups
-# ---------------------------------------------------------------------------
 
 function Evaluate-PrivilegeDrift {
     [OutputType([System.Collections.Generic.List[PSCustomObject]])]
     param(
         [Parameter(Mandatory)] [PSCustomObject] $Rule,
-        [Parameter(Mandatory)] [PSCustomObject] $IdentitySnapshot
+        [Parameter(Mandatory)] [PSCustomObject] $IdentitySnapshot,
+
+        # RulesDocument is needed to read the privileged flag on entitlement model groups.
+        # Optional so existing callers that do not pass it continue to work.
+        [Parameter()] [PSCustomObject] $RulesDocument = $null
     )
 
     $findings = [System.Collections.Generic.List[PSCustomObject]]::new()
     $p        = $Rule.parameters
 
-    # Build privileged group ID set once
+    # Build the set of privileged group IDs using two sources:
+    #
+    # 1. IsPrivileged on the group snapshot — set by IDCollector based on _privilegedTiers.
+    #    Catches groups whose tier is Manager or Manager/Staff.
+    #
+    # 2. The privileged flag in the entitlementModel — catches groups that are explicitly
+    #    marked privileged regardless of tier. This is needed for groups like SG_Security_Core
+    #    (tier: Base, privileged: true) that the tier check alone would miss.
+    #
+    # The union of both sources is the correct privileged group set.
+    $entitlementPrivileged = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    if ($null -ne $RulesDocument -and $RulesDocument.PSObject.Properties['entitlementModel'] -and
+        $null -ne $RulesDocument.entitlementModel.groups) {
+        foreach ($prop in $RulesDocument.entitlementModel.groups.PSObject.Properties) {
+            if ($prop.Value.PSObject.Properties['privileged'] -and $prop.Value.privileged -eq $true) {
+                [void]$entitlementPrivileged.Add($prop.Name)
+            }
+        }
+    }
+
     $privGroupIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     foreach ($g in $IdentitySnapshot.Groups) {
-        $isPriv = $g.IsPrivileged
+
+        # A group is privileged if the snapshot says so OR if the entitlement model explicitly flags it.
+        $isPriv = $g.IsPrivileged -or $entitlementPrivileged.Contains($g.DisplayName)
+
         if ($p.PSObject.Properties['tier0GroupPatterns']) {
             $isPriv = $isPriv -or ($p.tier0GroupPatterns | Where-Object { $g.DisplayName -match $_ })
         }
@@ -256,13 +248,14 @@ function Evaluate-PrivilegeDrift {
     }
 
     foreach ($user in $IdentitySnapshot.Users) {
-        $userGroupIds     = @()
+
+        $userGroupIds = @()
         if ($IdentitySnapshot.MembershipMap.ContainsKey($user.UserId)) {
             $userGroupIds = $IdentitySnapshot.MembershipMap[$user.UserId]
         }
         $userPrivGroupIds = @($userGroupIds | Where-Object { $privGroupIds.Contains($_) })
 
-        # Disabled account in privileged group
+        # Disabled account that still holds privileged group memberships
         if ($p.PSObject.Properties['requireEnabled'] -and $p.scope -eq 'PrivilegedGroups') {
             if (-not $user.AccountEnabled -and $userPrivGroupIds.Count -gt 0) {
                 $names = ($IdentitySnapshot.Groups |
@@ -281,7 +274,7 @@ function Evaluate-PrivilegeDrift {
             continue
         }
 
-        # MFA not registered on privileged account
+        # Privileged account with no MFA registered — the highest-risk hygiene gap
         if ($p.PSObject.Properties['requireMFA'] -and $p.scope -eq 'PrivilegedGroups') {
             $mfaOk = $user.PSObject.Properties['MfaRegistered'] -and $user.MfaRegistered -eq $true
             if ($userPrivGroupIds.Count -gt 0 -and -not $mfaOk) {
@@ -298,7 +291,7 @@ function Evaluate-PrivilegeDrift {
             continue
         }
 
-        # Tier 0 isolation — non-admin account in Tier 0 group
+        # Tier-0 isolation — standard accounts should never appear in Tier-0 groups
         if ($p.PSObject.Properties['enforceTierIsolation'] -and $p.PSObject.Properties['tier0GroupPatterns']) {
             $tier0Groups = $IdentitySnapshot.Groups | Where-Object {
                 $gid = $_.GroupId; $gName = $_.DisplayName
@@ -324,7 +317,9 @@ function Evaluate-PrivilegeDrift {
             continue
         }
 
-        # Mixed privileged + standard membership
+        # Mixed membership — account is simultaneously in privileged and standard groups.
+        # This is a separation of duties concern; privileged identities should not share
+        # a user account with day-to-day standard access.
         if ($p.PSObject.Properties['detectMixedMembership'] -and $p.detectMixedMembership) {
             $hasPriv    = $userPrivGroupIds.Count -gt 0
             $hasNonPriv = @($userGroupIds | Where-Object { -not $privGroupIds.Contains($_) }).Count -gt 0
@@ -345,7 +340,7 @@ function Evaluate-PrivilegeDrift {
             continue
         }
 
-        # Admin account used in standard groups (dual-use)
+        # Admin account in standard groups — admin accounts should only be in privileged groups
         if ($p.PSObject.Properties['detectAdminAccountDualUse'] -and $p.detectAdminAccountDualUse) {
             $isAdmin = $p.PSObject.Properties['adminAccountPatterns'] -and (
                 $p.adminAccountPatterns | Where-Object { $user.UserPrincipalName -match $_ }
@@ -370,7 +365,7 @@ function Evaluate-PrivilegeDrift {
             continue
         }
 
-        # Service account in interactive user group
+        # Service account in interactive user groups
         if ($p.PSObject.Properties['serviceAccountPatterns'] -and $p.PSObject.Properties['forbiddenGroupPatterns']) {
             $isSvc = $p.serviceAccountPatterns | Where-Object { $user.UserPrincipalName -match $_ }
             if ($isSvc) {
@@ -400,13 +395,6 @@ function Evaluate-PrivilegeDrift {
     return $findings
 }
 
-# ---------------------------------------------------------------------------
-# Evaluate-EntitlementModel
-# Enforces declarative entitlement model from Rules.json:
-#   ENT-001 Employment mismatch (non-privileged)
-#   ENT-002 Employment mismatch in privileged tier (blocking)
-#   ENT-003 Group not defined in entitlement model (unmanaged)
-# ---------------------------------------------------------------------------
 
 function Evaluate-EntitlementModel {
     [OutputType([System.Collections.Generic.List[PSCustomObject]])]
@@ -418,14 +406,13 @@ function Evaluate-EntitlementModel {
 
     $findings = [System.Collections.Generic.List[PSCustomObject]]::new()
     $p        = $Rule.parameters
+    $model    = $RulesDocument.entitlementModel
 
-    $model = $RulesDocument.entitlementModel
     if ($null -eq $model -or $null -eq $model.groups) {
         Write-Debug 'Evaluate-EntitlementModel: No entitlementModel.groups in rules document.'
         return $findings
     }
 
-    # Case-insensitive group name -> policy lookup
     $modelLookup = [hashtable]::new([System.StringComparer]::OrdinalIgnoreCase)
     foreach ($prop in $model.groups.PSObject.Properties) {
         $modelLookup[$prop.Name] = $prop.Value
@@ -434,31 +421,29 @@ function Evaluate-EntitlementModel {
     $privilegedTiers = @()
     if ($model.PSObject.Properties['_privilegedTiers']) { $privilegedTiers = $model._privilegedTiers }
 
-    # GroupId -> DisplayName for fast lookup
     $groupById = @{}
     foreach ($g in $IdentitySnapshot.Groups) { $groupById[$g.GroupId] = $g.DisplayName }
 
     foreach ($user in $IdentitySnapshot.Users) {
+
         $userGroupIds = @()
         if ($IdentitySnapshot.MembershipMap.ContainsKey($user.UserId)) {
             $userGroupIds = $IdentitySnapshot.MembershipMap[$user.UserId]
         }
         if ($userGroupIds.Count -eq 0) { continue }
 
-        # ── Null EmployeeType guard ──────────────────────────────────────────
-        # If EmployeeType is missing, entitlement validation cannot be performed.
-        # Emit a finding rather than silently skipping — incomplete HR data is
-        # itself a policy violation because membership cannot be validated.
-        # Normalise EmployeeType from Azure AD — trim whitespace, lowercase hyphen variants.
-        # Azure AD / HR sync frequently produces: 'Full-Time ', 'Fulltime ', 'FULL-TIME'.
-        # Canonical values in Rules.json are: 'Full-time', 'Intern', 'Contractor'.
+        # Normalise EmployeeType — HR sync frequently produces variants like 'Full-Time ' or 'FULL-TIME'.
+        # Canonical values in the entitlement model are: Full-time, Intern, Contractor.
         $employmentType = ($user.EmployeeType ?? '').Trim()
         $employmentType = switch -Regex ($employmentType.ToLower()) {
             '^full.?time$' { 'Full-time'  }
             '^intern$'     { 'Intern'     }
             '^contractor$' { 'Contractor' }
-            default        { $employmentType }   # preserve unknown values for the finding message
+            default        { $employmentType }
         }
+
+        # Missing EmployeeType means we cannot validate group membership against policy.
+        # Emit a finding rather than silently skipping — incomplete HR data is itself a violation.
         if ([string]::IsNullOrWhiteSpace($employmentType)) {
             if ($p.PSObject.Properties['checkEmployment'] -or $p.PSObject.Properties['checkPrivilegedTier']) {
                 $findings.Add((New-ComplianceFinding `
@@ -474,9 +459,9 @@ function Evaluate-EntitlementModel {
             continue
         }
 
-        # ── ENT-003: collect ALL unmanaged groups first, emit ONE finding ────
-        # Emitting one finding per unmanaged group causes score inflation.
-        # A user in 6 unmanaged groups has ONE policy violation, not six.
+        # ENT-003: one finding per user for all unmanaged groups combined.
+        # Emitting one finding per group would inflate the score — being in 6 unmanaged groups
+        # is still one policy violation, not six separate ones.
         if ($p.PSObject.Properties['unknownGroupAlert'] -and $p.unknownGroupAlert) {
             $unmanagedGroupNames = [System.Collections.Generic.List[string]]::new()
             foreach ($gid in $userGroupIds) {
@@ -500,7 +485,7 @@ function Evaluate-EntitlementModel {
             continue
         }
 
-        # ── ENT-001 / ENT-002: per-group employment policy checks ────────────
+        # ENT-001 / ENT-002: check each group the user belongs to against the entitlement model
         foreach ($gid in $userGroupIds) {
             if (-not $groupById.ContainsKey($gid)) { continue }
             $groupName = $groupById[$gid]
@@ -508,11 +493,12 @@ function Evaluate-EntitlementModel {
 
             $policy    = $modelLookup[$groupName]
             $groupTier = $policy.tier
-            $allowedTypes      = @($policy.allowedEmployment)
-            $isPrivTier        = $privilegedTiers -contains $groupTier
+
+            $allowedTypes       = @($policy.allowedEmployment)
+            $isPrivTier         = $privilegedTiers -contains $groupTier
             $employmentMismatch = $allowedTypes -notcontains $employmentType
 
-            # ENT-002: employment mismatch in a privileged-tier group (blocking)
+            # ENT-002: employment type in a privileged tier group — always blocking
             if ($p.PSObject.Properties['checkPrivilegedTier'] -and $p.checkPrivilegedTier) {
                 if ($isPrivTier -and $employmentMismatch) {
                     $findings.Add((New-ComplianceFinding `
@@ -528,7 +514,7 @@ function Evaluate-EntitlementModel {
                 continue
             }
 
-            # ENT-001: employment mismatch in a standard group (non-blocking)
+            # ENT-001: employment type in a standard group — flagged for review, not blocking
             if ($p.PSObject.Properties['checkEmployment'] -and $p.checkEmployment) {
                 if ($employmentMismatch -and -not $isPrivTier) {
                     $findings.Add((New-ComplianceFinding `
@@ -549,32 +535,25 @@ function Evaluate-EntitlementModel {
     return $findings
 }
 
-# ---------------------------------------------------------------------------
-# Dispatch table — maps rule.type to evaluator functions.
-# Allows Rules.json to select logic dynamically without code changes.
-# ---------------------------------------------------------------------------
 
+# Dispatch table — rule.type maps to the evaluator function that handles it.
+# $doc (RulesDocument) is now passed to Evaluate-PrivilegeDrift so it can read
+# the privileged flag from the entitlement model, not just the tier-based check.
 $Script:IdentityDispatch = @{
     'Evaluate-EmploymentAlignment' = { param($r, $s, $doc) Evaluate-EmploymentAlignment -Rule $r -IdentitySnapshot $s }
-    'Evaluate-PrivilegeDrift'      = { param($r, $s, $doc) Evaluate-PrivilegeDrift      -Rule $r -IdentitySnapshot $s }
+    'Evaluate-PrivilegeDrift'      = { param($r, $s, $doc) Evaluate-PrivilegeDrift      -Rule $r -IdentitySnapshot $s -RulesDocument $doc }
     'Evaluate-EntitlementModel'    = { param($r, $s, $doc) Evaluate-EntitlementModel    -Rule $r -IdentitySnapshot $s -RulesDocument $doc }
 }
 
-# ---------------------------------------------------------------------------
-# PUBLIC orchestrator — executes all identity-plane rules and returns findings.
-# ---------------------------------------------------------------------------
 
 function Invoke-IdentityRuleEngine {
     <#
     .SYNOPSIS
         Evaluates all Identity/Access/Architecture/Hygiene rules against the identity snapshot.
-
     .PARAMETER RulesDocument
         Parsed Rules.json object (pass the result of ConvertFrom-Json, not the path).
-
     .PARAMETER IdentitySnapshot
         Output from Get-IdentitySnapshot.
-
     .OUTPUTS
         List[PSCustomObject] — all findings from identity-plane rules
     #>
@@ -603,9 +582,8 @@ function Invoke-IdentityRuleEngine {
         }
     }
 
-    # ── Suppression pass (shared) ─────────────────────────────────────────────
-    # Reads suppressesOnMatch from Rules.json. Removes findings for rules that
-    # are superseded by a higher-priority rule that fired on the same entity.
+    # Remove findings that are superseded by a more specific rule firing on the same entity.
+    # Suppression chains are declared in Rules.json — no hardcoded logic here.
     $allFindings = Invoke-SuppressionPass -Findings $allFindings -RulesDocument $RulesDocument
 
     return $allFindings

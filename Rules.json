@@ -1,0 +1,1070 @@
+{
+  "version": "3.0.0",
+  "lastModified": "2026-03-16",
+
+  "entitlementModel": {
+    "_comment": "Governed groups with allowed employment types, tier, and privilege classification. The privileged flag is the authoritative source for JML provisioning decisions. Tier drives validation engine rule evaluation.",
+    "_tiers": {
+      "Base":           "Standard department membership. Low privilege.",
+      "Base/Staff":     "Operational access with elevated permissions. Not management-tier.",
+      "Manager":        "Management-level access. Privileged. Full-time only.",
+      "Manager/Staff":  "Combined management and operational access. Privileged. Full-time only.",
+      "Administrative": "License or Conditional Access assignment group. No direct resource access."
+    },
+    "_privilegedTiers": [
+      "Manager",
+      "Manager/Staff"
+    ],
+    "_note": "Groups marked privileged:true but with tier Base or Base/Staff (e.g. Security Engineer, Security Core) require the privileged flag to be read directly. The _privilegedTiers list covers tier-based checks only.",
+
+    "groups": {
+
+      "SG_CEO_Core": {
+        "objectId": "8c91f3b4-4b59-4777-8110-153f3f05f3d5",
+        "allowedEmployment": ["Full-time"],
+        "tier": "Manager",
+        "privileged": true
+      },
+      "SG_Executive_Core": {
+        "objectId": "75b7b337-6797-441a-802c-28fe3ee4e43b",
+        "allowedEmployment": ["Full-time"],
+        "tier": "Manager",
+        "privileged": true
+      },
+      "SG_Executive_Finance": {
+        "objectId": "b63364e3-fdfb-42fd-8c01-869d35aa070d",
+        "allowedEmployment": ["Full-time"],
+        "tier": "Manager",
+        "privileged": true
+      },
+      "SG_Executive_HR": {
+        "objectId": "28d91ebd-77f2-4ad4-a767-8ba11ddc24ff",
+        "allowedEmployment": ["Full-time"],
+        "tier": "Manager",
+        "privileged": true
+      },
+      "SG_Executive_Sales": {
+        "objectId": "42afeb6e-d72c-4e3b-a155-614f40f0f042",
+        "allowedEmployment": ["Full-time"],
+        "tier": "Manager",
+        "privileged": true
+      },
+
+      "SG_Sales_Core": {
+        "objectId": "111fdfb6-1709-4987-8818-b66417d89f91",
+        "allowedEmployment": ["Full-time", "Intern", "Contractor"],
+        "tier": "Base",
+        "privileged": false
+      },
+      "SG_Sales_Manager": {
+        "objectId": "0c67c63b-a6e2-4bf6-b4a0-3a860384cf08",
+        "allowedEmployment": ["Full-time"],
+        "tier": "Manager",
+        "privileged": true
+      },
+      "SG_Sales_Staff": {
+        "objectId": "62232728-47eb-4308-b3d3-91e4cb8bb0b4",
+        "allowedEmployment": ["Full-time", "Contractor"],
+        "tier": "Base/Staff",
+        "privileged": false
+      },
+      "SG_Sales_Intern": {
+        "objectId": "144af628-c5a7-4e1f-91b3-010b8ae9469e",
+        "allowedEmployment": ["Intern"],
+        "tier": "Base",
+        "privileged": false
+      },
+      "SG_Sales_Contractor": {
+        "objectId": "3f36950a-2f27-4d09-952e-48cf4a4ef692",
+        "allowedEmployment": ["Contractor"],
+        "tier": "Base",
+        "privileged": false
+      },
+
+      "SG_Finance_Core": {
+        "objectId": "8410d4d1-fe60-413f-9d2d-6d33200c6517",
+        "allowedEmployment": ["Full-time", "Intern", "Contractor"],
+        "tier": "Base",
+        "privileged": false
+      },
+      "SG_Finance_Manager": {
+        "objectId": "c2b66a61-cf52-4cf8-b9fe-7557efcf7853",
+        "allowedEmployment": ["Full-time"],
+        "tier": "Manager",
+        "privileged": true
+      },
+      "SG_Finance_Staff": {
+        "objectId": "5d33063f-53da-4d01-a87c-1d5f460b840b",
+        "allowedEmployment": ["Full-time", "Contractor"],
+        "tier": "Base/Staff",
+        "privileged": false
+      },
+      "SG_Finance_Intern": {
+        "objectId": "c9edbc72-f5f5-4ee0-afef-45204e7da153",
+        "allowedEmployment": ["Intern"],
+        "tier": "Base",
+        "privileged": false
+      },
+      "SG_Finance_Contractor": {
+        "objectId": "daafe4fc-0f91-46c8-9457-5094c6ebab73",
+        "allowedEmployment": ["Contractor"],
+        "tier": "Base",
+        "privileged": false
+      },
+
+      "SG_HR_Core": {
+        "objectId": "3005476d-7190-480a-a23f-ab65f0d2061e",
+        "allowedEmployment": ["Full-time", "Intern"],
+        "tier": "Base",
+        "privileged": false
+      },
+      "SG_HR_Manager": {
+        "objectId": "fd309a8a-e303-4ac4-bd03-454a5d8048c7",
+        "allowedEmployment": ["Full-time"],
+        "tier": "Manager",
+        "privileged": true
+      },
+      "SG_HR_Staff": {
+        "objectId": "999749f5-e34a-47ce-be6e-22bba169fce0",
+        "allowedEmployment": ["Full-time"],
+        "tier": "Base/Staff",
+        "privileged": false
+      },
+      "SG_HR_Intern": {
+        "objectId": "4fc58c2f-53da-488a-9afa-99b0589d1a96",
+        "allowedEmployment": ["Intern"],
+        "tier": "Base",
+        "privileged": false
+      },
+
+      "SG_IT_Core": {
+        "objectId": "fc34a451-4897-4139-88e8-6464cd2f4a85",
+        "allowedEmployment": ["Full-time", "Contractor"],
+        "tier": "Base",
+        "privileged": false
+      },
+      "SG_IT_Manager": {
+        "objectId": "49349779-b40b-4989-af0c-bf2c78c459e1",
+        "allowedEmployment": ["Full-time"],
+        "tier": "Manager/Staff",
+        "privileged": true
+      },
+      "SG_IT_Staff": {
+        "objectId": "f24a7cb3-6c38-4220-8637-5927ec8bed94",
+        "allowedEmployment": ["Full-time"],
+        "tier": "Base/Staff",
+        "privileged": false
+      },
+      "SG_IT_Helpdesk": {
+        "objectId": "7be31fc9-5eb9-4891-a0d4-677f63f7ffa0",
+        "allowedEmployment": ["Full-time", "Contractor"],
+        "tier": "Base/Staff",
+        "privileged": false
+      },
+
+      "SG_Security_Core": {
+        "objectId": "f6daa7ee-7873-4317-8b5b-59a059564fa7",
+        "allowedEmployment": ["Full-time", "Contractor"],
+        "tier": "Base",
+        "privileged": true
+      },
+      "SG_Security_HOD": {
+        "objectId": "f67c852c-74bd-4565-8ffc-d54a8da7f18e",
+        "allowedEmployment": ["Full-time"],
+        "tier": "Manager",
+        "privileged": true
+      },
+      "SG_Security_Engineer": {
+        "objectId": "a69f3794-1409-4df1-980f-7ee45504b157",
+        "allowedEmployment": ["Full-time"],
+        "tier": "Base/Staff",
+        "privileged": true
+      },
+      "SG_Security_Contractor": {
+        "objectId": "d7676462-a16b-46e9-8237-a13fe98b5980",
+        "allowedEmployment": ["Contractor"],
+        "tier": "Base",
+        "privileged": true
+      },
+
+      "SG_Employment_Manager": {
+        "objectId": "ee6ad6f6-c73c-4d7b-b734-5de4a5a12f09",
+        "allowedEmployment": ["Full-time"],
+        "tier": "Manager",
+        "privileged": true
+      },
+      "SG_Employment_Staff": {
+        "objectId": "179c3709-d374-46c8-9d9e-8a189a5dab3d",
+        "allowedEmployment": ["Full-time"],
+        "tier": "Base/Staff",
+        "privileged": false
+      },
+      "SG_Employment_Intern": {
+        "objectId": "255b5ebf-40c1-4a3b-81c9-4d676e73bf5b",
+        "allowedEmployment": ["Intern"],
+        "tier": "Base",
+        "privileged": false
+      },
+      "SG_Employment_Contractor": {
+        "objectId": "3483f4a1-9dd3-403f-a3cd-3bb8d1961cd8",
+        "allowedEmployment": ["Contractor"],
+        "tier": "Base",
+        "privileged": false
+      },
+
+      "LIC_M365_E3": {
+        "objectId": "d18f0b08-1ab6-462b-95ff-707c88cc7e0b",
+        "allowedEmployment": ["Full-time", "Intern", "Contractor"],
+        "tier": "Administrative",
+        "privileged": false
+      },
+      "LIC_M365_E5": {
+        "objectId": "5d92e3c8-9d19-46da-b692-26297278084e",
+        "allowedEmployment": ["Full-time"],
+        "tier": "Administrative",
+        "privileged": false
+      },
+      "LIC_Security_Addon": {
+        "objectId": "4e73e839-33a0-49cf-83bc-6b27a32866b5",
+        "allowedEmployment": ["Full-time", "Contractor"],
+        "tier": "Administrative",
+        "privileged": false
+      },
+      "LIC_Finance_Addon": {
+        "objectId": "ddfd7df2-a436-4f44-b8df-f90b95189958",
+        "allowedEmployment": ["Full-time", "Intern", "Contractor"],
+        "tier": "Administrative",
+        "privileged": false
+      },
+
+      "CA_Standard_Users": {
+        "objectId": "3e67ae85-f761-46ce-b958-54ec38625736",
+        "allowedEmployment": ["Full-time", "Intern"],
+        "tier": "Administrative",
+        "privileged": false
+      },
+      "CA_Privileged_Users": {
+        "objectId": "87a64cce-8b63-4b7e-8c1a-703a695ee2cc",
+        "allowedEmployment": ["Full-time"],
+        "tier": "Administrative",
+        "privileged": false
+      },
+      "CA_Contractors": {
+        "objectId": "081cf46b-806b-449f-a838-98cc0433b5d1",
+        "allowedEmployment": ["Contractor"],
+        "tier": "Administrative",
+        "privileged": false
+      },
+      "CA_Executives": {
+        "objectId": "6ef01a0c-1f43-4408-b997-87ef107d4f16",
+        "allowedEmployment": ["Full-time"],
+        "tier": "Administrative",
+        "privileged": false
+      }
+    }
+  },
+
+  "mappingRules": [
+    {
+      "_comment": "Mapping rules drive JML entitlement resolution. Each rule matches on canonical identity fields produced by the normaliser and defines every group the identity receives. The privileged flag on each group entry is the source of truth for PreProvision correlation checks — do not rely on the entitlementModel or _privilegedTiers for JML provisioning decisions."
+    },
+
+    {
+      "id": "MAP-CEO-001",
+      "description": "CEO — full executive and leadership access",
+      "conditions": {
+        "jobTitle": { "operator": "exact", "value": "CEO" }
+      },
+      "entitlements": {
+        "groups": [
+          { "id": "8c91f3b4-4b59-4777-8110-153f3f05f3d5", "displayName": "SG_CEO_Core",        "privileged": true  },
+          { "id": "75b7b337-6797-441a-802c-28fe3ee4e43b", "displayName": "SG_Executive_Core",  "privileged": true  },
+          { "id": "5d92e3c8-9d19-46da-b692-26297278084e", "displayName": "LIC_M365_E5",         "privileged": false },
+          { "id": "87a64cce-8b63-4b7e-8c1a-703a695ee2cc", "displayName": "CA_Privileged_Users", "privileged": false },
+          { "id": "6ef01a0c-1f43-4408-b997-87ef107d4f16", "displayName": "CA_Executives",       "privileged": false }
+        ]
+      }
+    },
+
+    {
+      "id": "MAP-EXEC-FINANCE-001",
+      "description": "Executive Finance — executive core, finance executive group, finance department membership",
+      "conditions": {
+        "jobTitle": { "operator": "exact", "value": "Executive Finance" }
+      },
+      "entitlements": {
+        "groups": [
+          { "id": "75b7b337-6797-441a-802c-28fe3ee4e43b", "displayName": "SG_Executive_Core",    "privileged": true  },
+          { "id": "b63364e3-fdfb-42fd-8c01-869d35aa070d", "displayName": "SG_Executive_Finance", "privileged": true  },
+          { "id": "8410d4d1-fe60-413f-9d2d-6d33200c6517", "displayName": "SG_Finance_Core",      "privileged": false },
+          { "id": "5d92e3c8-9d19-46da-b692-26297278084e", "displayName": "LIC_M365_E5",           "privileged": false },
+          { "id": "ddfd7df2-a436-4f44-b8df-f90b95189958", "displayName": "LIC_Finance_Addon",     "privileged": false },
+          { "id": "87a64cce-8b63-4b7e-8c1a-703a695ee2cc", "displayName": "CA_Privileged_Users",  "privileged": false },
+          { "id": "6ef01a0c-1f43-4408-b997-87ef107d4f16", "displayName": "CA_Executives",         "privileged": false }
+        ]
+      }
+    },
+
+    {
+      "id": "MAP-EXEC-HR-001",
+      "description": "Executive HR — executive core, HR executive group, HR department membership",
+      "conditions": {
+        "jobTitle": { "operator": "exact", "value": "Executive HR" }
+      },
+      "entitlements": {
+        "groups": [
+          { "id": "75b7b337-6797-441a-802c-28fe3ee4e43b", "displayName": "SG_Executive_Core", "privileged": true  },
+          { "id": "28d91ebd-77f2-4ad4-a767-8ba11ddc24ff", "displayName": "SG_Executive_HR",   "privileged": true  },
+          { "id": "3005476d-7190-480a-a23f-ab65f0d2061e", "displayName": "SG_HR_Core",         "privileged": false },
+          { "id": "5d92e3c8-9d19-46da-b692-26297278084e", "displayName": "LIC_M365_E5",         "privileged": false },
+          { "id": "87a64cce-8b63-4b7e-8c1a-703a695ee2cc", "displayName": "CA_Privileged_Users", "privileged": false },
+          { "id": "6ef01a0c-1f43-4408-b997-87ef107d4f16", "displayName": "CA_Executives",       "privileged": false }
+        ]
+      }
+    },
+
+    {
+      "id": "MAP-EXEC-SALES-001",
+      "description": "Executive Sales — executive core, sales executive group, sales department membership",
+      "conditions": {
+        "jobTitle": { "operator": "exact", "value": "Executive Sales" }
+      },
+      "entitlements": {
+        "groups": [
+          { "id": "75b7b337-6797-441a-802c-28fe3ee4e43b", "displayName": "SG_Executive_Core",  "privileged": true  },
+          { "id": "42afeb6e-d72c-4e3b-a155-614f40f0f042", "displayName": "SG_Executive_Sales", "privileged": true  },
+          { "id": "111fdfb6-1709-4987-8818-b66417d89f91", "displayName": "SG_Sales_Core",       "privileged": false },
+          { "id": "5d92e3c8-9d19-46da-b692-26297278084e", "displayName": "LIC_M365_E5",          "privileged": false },
+          { "id": "87a64cce-8b63-4b7e-8c1a-703a695ee2cc", "displayName": "CA_Privileged_Users", "privileged": false },
+          { "id": "6ef01a0c-1f43-4408-b997-87ef107d4f16", "displayName": "CA_Executives",        "privileged": false }
+        ]
+      }
+    },
+
+    {
+      "id": "MAP-SALES-MANAGER-001",
+      "description": "Sales Manager — sales core, manager group, E5, privileged CA policy",
+      "conditions": {
+        "jobTitle": { "operator": "exact", "value": "Sales Manager" }
+      },
+      "entitlements": {
+        "groups": [
+          { "id": "111fdfb6-1709-4987-8818-b66417d89f91", "displayName": "SG_Sales_Core",       "privileged": false },
+          { "id": "0c67c63b-a6e2-4bf6-b4a0-3a860384cf08", "displayName": "SG_Sales_Manager",    "privileged": true  },
+          { "id": "5d92e3c8-9d19-46da-b692-26297278084e", "displayName": "LIC_M365_E5",          "privileged": false },
+          { "id": "87a64cce-8b63-4b7e-8c1a-703a695ee2cc", "displayName": "CA_Privileged_Users", "privileged": false }
+        ]
+      }
+    },
+
+    {
+      "id": "MAP-SALES-STAFF-001",
+      "description": "Sales Staff — sales core, staff group, E3, standard CA policy",
+      "conditions": {
+        "jobTitle": { "operator": "exact", "value": "Sales Staff" }
+      },
+      "entitlements": {
+        "groups": [
+          { "id": "111fdfb6-1709-4987-8818-b66417d89f91", "displayName": "SG_Sales_Core",      "privileged": false },
+          { "id": "62232728-47eb-4308-b3d3-91e4cb8bb0b4", "displayName": "SG_Sales_Staff",     "privileged": false },
+          { "id": "d18f0b08-1ab6-462b-95ff-707c88cc7e0b", "displayName": "LIC_M365_E3",         "privileged": false },
+          { "id": "3e67ae85-f761-46ce-b958-54ec38625736", "displayName": "CA_Standard_Users",  "privileged": false }
+        ]
+      }
+    },
+
+    {
+      "id": "MAP-SALES-INTERN-001",
+      "description": "Sales Intern — sales core, intern group, E3, standard CA policy",
+      "conditions": {
+        "jobTitle": { "operator": "exact", "value": "Sales Intern" }
+      },
+      "entitlements": {
+        "groups": [
+          { "id": "111fdfb6-1709-4987-8818-b66417d89f91", "displayName": "SG_Sales_Core",     "privileged": false },
+          { "id": "144af628-c5a7-4e1f-91b3-010b8ae9469e", "displayName": "SG_Sales_Intern",   "privileged": false },
+          { "id": "d18f0b08-1ab6-462b-95ff-707c88cc7e0b", "displayName": "LIC_M365_E3",        "privileged": false },
+          { "id": "3e67ae85-f761-46ce-b958-54ec38625736", "displayName": "CA_Standard_Users", "privileged": false }
+        ]
+      }
+    },
+
+    {
+      "id": "MAP-SALES-CONTRACTOR-001",
+      "description": "Sales Contractor — sales core, contractor group, E3, contractor CA policy",
+      "conditions": {
+        "jobTitle":        { "operator": "exact", "value": "Sales Contractor" },
+        "employmentType":  { "operator": "exact", "value": "Contractor" }
+      },
+      "entitlements": {
+        "groups": [
+          { "id": "111fdfb6-1709-4987-8818-b66417d89f91", "displayName": "SG_Sales_Core",       "privileged": false },
+          { "id": "3f36950a-2f27-4d09-952e-48cf4a4ef692", "displayName": "SG_Sales_Contractor", "privileged": false },
+          { "id": "d18f0b08-1ab6-462b-95ff-707c88cc7e0b", "displayName": "LIC_M365_E3",          "privileged": false },
+          { "id": "081cf46b-806b-449f-a838-98cc0433b5d1", "displayName": "CA_Contractors",       "privileged": false }
+        ]
+      }
+    },
+
+    {
+      "id": "MAP-FINANCE-MANAGER-001",
+      "description": "Finance Manager — finance core, manager group, E5, Finance Addon, privileged CA policy",
+      "conditions": {
+        "jobTitle": { "operator": "exact", "value": "Finance Manager" }
+      },
+      "entitlements": {
+        "groups": [
+          { "id": "8410d4d1-fe60-413f-9d2d-6d33200c6517", "displayName": "SG_Finance_Core",     "privileged": false },
+          { "id": "c2b66a61-cf52-4cf8-b9fe-7557efcf7853", "displayName": "SG_Finance_Manager",  "privileged": true  },
+          { "id": "5d92e3c8-9d19-46da-b692-26297278084e", "displayName": "LIC_M365_E5",          "privileged": false },
+          { "id": "ddfd7df2-a436-4f44-b8df-f90b95189958", "displayName": "LIC_Finance_Addon",    "privileged": false },
+          { "id": "87a64cce-8b63-4b7e-8c1a-703a695ee2cc", "displayName": "CA_Privileged_Users", "privileged": false }
+        ]
+      }
+    },
+
+    {
+      "id": "MAP-FINANCE-STAFF-001",
+      "description": "Finance Staff — finance core, staff group, E3, Finance Addon, standard CA policy",
+      "conditions": {
+        "jobTitle": { "operator": "exact", "value": "Finance Staff" }
+      },
+      "entitlements": {
+        "groups": [
+          { "id": "8410d4d1-fe60-413f-9d2d-6d33200c6517", "displayName": "SG_Finance_Core",    "privileged": false },
+          { "id": "5d33063f-53da-4d01-a87c-1d5f460b840b", "displayName": "SG_Finance_Staff",   "privileged": false },
+          { "id": "d18f0b08-1ab6-462b-95ff-707c88cc7e0b", "displayName": "LIC_M365_E3",         "privileged": false },
+          { "id": "ddfd7df2-a436-4f44-b8df-f90b95189958", "displayName": "LIC_Finance_Addon",   "privileged": false },
+          { "id": "3e67ae85-f761-46ce-b958-54ec38625736", "displayName": "CA_Standard_Users",  "privileged": false }
+        ]
+      }
+    },
+
+    {
+      "id": "MAP-FINANCE-INTERN-001",
+      "description": "Finance Intern — finance core, intern group, E3, Finance Addon, standard CA policy",
+      "conditions": {
+        "jobTitle": { "operator": "exact", "value": "Finance Intern" }
+      },
+      "entitlements": {
+        "groups": [
+          { "id": "8410d4d1-fe60-413f-9d2d-6d33200c6517", "displayName": "SG_Finance_Core",    "privileged": false },
+          { "id": "c9edbc72-f5f5-4ee0-afef-45204e7da153", "displayName": "SG_Finance_Intern",  "privileged": false },
+          { "id": "d18f0b08-1ab6-462b-95ff-707c88cc7e0b", "displayName": "LIC_M365_E3",         "privileged": false },
+          { "id": "ddfd7df2-a436-4f44-b8df-f90b95189958", "displayName": "LIC_Finance_Addon",   "privileged": false },
+          { "id": "3e67ae85-f761-46ce-b958-54ec38625736", "displayName": "CA_Standard_Users",  "privileged": false }
+        ]
+      }
+    },
+
+    {
+      "id": "MAP-FINANCE-CONTRACTOR-001",
+      "description": "Finance Contractor — finance core, contractor group, E3, Finance Addon, contractor CA policy",
+      "conditions": {
+        "jobTitle":       { "operator": "exact", "value": "Finance Contractor" },
+        "employmentType": { "operator": "exact", "value": "Contractor" }
+      },
+      "entitlements": {
+        "groups": [
+          { "id": "8410d4d1-fe60-413f-9d2d-6d33200c6517", "displayName": "SG_Finance_Core",       "privileged": false },
+          { "id": "daafe4fc-0f91-46c8-9457-5094c6ebab73", "displayName": "SG_Finance_Contractor", "privileged": false },
+          { "id": "d18f0b08-1ab6-462b-95ff-707c88cc7e0b", "displayName": "LIC_M365_E3",            "privileged": false },
+          { "id": "ddfd7df2-a436-4f44-b8df-f90b95189958", "displayName": "LIC_Finance_Addon",      "privileged": false },
+          { "id": "081cf46b-806b-449f-a838-98cc0433b5d1", "displayName": "CA_Contractors",         "privileged": false }
+        ]
+      }
+    },
+
+    {
+      "id": "MAP-HR-MANAGER-001",
+      "description": "HR Manager — HR core, manager group, E5, privileged CA policy",
+      "conditions": {
+        "jobTitle": { "operator": "exact", "value": "HR Manager" }
+      },
+      "entitlements": {
+        "groups": [
+          { "id": "3005476d-7190-480a-a23f-ab65f0d2061e", "displayName": "SG_HR_Core",           "privileged": false },
+          { "id": "fd309a8a-e303-4ac4-bd03-454a5d8048c7", "displayName": "SG_HR_Manager",        "privileged": true  },
+          { "id": "5d92e3c8-9d19-46da-b692-26297278084e", "displayName": "LIC_M365_E5",           "privileged": false },
+          { "id": "87a64cce-8b63-4b7e-8c1a-703a695ee2cc", "displayName": "CA_Privileged_Users",  "privileged": false }
+        ]
+      }
+    },
+
+    {
+      "id": "MAP-HR-STAFF-001",
+      "description": "HR Staff — HR core, staff group, E3, standard CA policy",
+      "conditions": {
+        "jobTitle": { "operator": "exact", "value": "HR Staff" }
+      },
+      "entitlements": {
+        "groups": [
+          { "id": "3005476d-7190-480a-a23f-ab65f0d2061e", "displayName": "SG_HR_Core",          "privileged": false },
+          { "id": "999749f5-e34a-47ce-be6e-22bba169fce0", "displayName": "SG_HR_Staff",         "privileged": false },
+          { "id": "d18f0b08-1ab6-462b-95ff-707c88cc7e0b", "displayName": "LIC_M365_E3",          "privileged": false },
+          { "id": "3e67ae85-f761-46ce-b958-54ec38625736", "displayName": "CA_Standard_Users",   "privileged": false }
+        ]
+      }
+    },
+
+    {
+      "id": "MAP-HR-INTERN-001",
+      "description": "HR Intern — HR core, intern group, E3, standard CA policy",
+      "conditions": {
+        "jobTitle": { "operator": "exact", "value": "HR Intern" }
+      },
+      "entitlements": {
+        "groups": [
+          { "id": "3005476d-7190-480a-a23f-ab65f0d2061e", "displayName": "SG_HR_Core",         "privileged": false },
+          { "id": "4fc58c2f-53da-488a-9afa-99b0589d1a96", "displayName": "SG_HR_Intern",       "privileged": false },
+          { "id": "d18f0b08-1ab6-462b-95ff-707c88cc7e0b", "displayName": "LIC_M365_E3",         "privileged": false },
+          { "id": "3e67ae85-f761-46ce-b958-54ec38625736", "displayName": "CA_Standard_Users",  "privileged": false }
+        ]
+      }
+    },
+
+    {
+      "id": "MAP-IT-MANAGER-001",
+      "description": "IT Manager — IT core, manager group, E5, privileged CA policy",
+      "conditions": {
+        "jobTitle": { "operator": "exact", "value": "IT Manager" }
+      },
+      "entitlements": {
+        "groups": [
+          { "id": "fc34a451-4897-4139-88e8-6464cd2f4a85", "displayName": "SG_IT_Core",          "privileged": false },
+          { "id": "49349779-b40b-4989-af0c-bf2c78c459e1", "displayName": "SG_IT_Manager",       "privileged": true  },
+          { "id": "5d92e3c8-9d19-46da-b692-26297278084e", "displayName": "LIC_M365_E5",          "privileged": false },
+          { "id": "87a64cce-8b63-4b7e-8c1a-703a695ee2cc", "displayName": "CA_Privileged_Users", "privileged": false }
+        ]
+      }
+    },
+
+    {
+      "id": "MAP-IT-STAFF-001",
+      "description": "IT Staff — IT core, staff group, E5, standard CA policy",
+      "conditions": {
+        "jobTitle": { "operator": "exact", "value": "IT Staff" }
+      },
+      "entitlements": {
+        "groups": [
+          { "id": "fc34a451-4897-4139-88e8-6464cd2f4a85", "displayName": "SG_IT_Core",         "privileged": false },
+          { "id": "f24a7cb3-6c38-4220-8637-5927ec8bed94", "displayName": "SG_IT_Staff",        "privileged": false },
+          { "id": "5d92e3c8-9d19-46da-b692-26297278084e", "displayName": "LIC_M365_E5",         "privileged": false },
+          { "id": "3e67ae85-f761-46ce-b958-54ec38625736", "displayName": "CA_Standard_Users",  "privileged": false }
+        ]
+      }
+    },
+
+    {
+      "id": "MAP-IT-HELPDESK-001",
+      "description": "Helpdesk — IT core, helpdesk group, E3, standard CA policy",
+      "conditions": {
+        "jobTitle": { "operator": "exact", "value": "Helpdesk" }
+      },
+      "entitlements": {
+        "groups": [
+          { "id": "fc34a451-4897-4139-88e8-6464cd2f4a85", "displayName": "SG_IT_Core",         "privileged": false },
+          { "id": "7be31fc9-5eb9-4891-a0d4-677f63f7ffa0", "displayName": "SG_IT_Helpdesk",     "privileged": false },
+          { "id": "d18f0b08-1ab6-462b-95ff-707c88cc7e0b", "displayName": "LIC_M365_E3",         "privileged": false },
+          { "id": "3e67ae85-f761-46ce-b958-54ec38625736", "displayName": "CA_Standard_Users",  "privileged": false }
+        ]
+      }
+    },
+
+    {
+      "id": "MAP-SECURITY-HOD-001",
+      "description": "Security HOD — security core, HOD group, E5, Security Addon, privileged CA policy",
+      "conditions": {
+        "jobTitle": { "operator": "exact", "value": "Security HOD" }
+      },
+      "entitlements": {
+        "groups": [
+          { "id": "f6daa7ee-7873-4317-8b5b-59a059564fa7", "displayName": "SG_Security_Core",    "privileged": true  },
+          { "id": "f67c852c-74bd-4565-8ffc-d54a8da7f18e", "displayName": "SG_Security_HOD",     "privileged": true  },
+          { "id": "5d92e3c8-9d19-46da-b692-26297278084e", "displayName": "LIC_M365_E5",          "privileged": false },
+          { "id": "4e73e839-33a0-49cf-83bc-6b27a32866b5", "displayName": "LIC_Security_Addon",  "privileged": false },
+          { "id": "87a64cce-8b63-4b7e-8c1a-703a695ee2cc", "displayName": "CA_Privileged_Users", "privileged": false }
+        ]
+      }
+    },
+
+    {
+      "id": "MAP-SECURITY-ENGINEER-001",
+      "description": "Security Engineer — security core, engineer group, E5, Security Addon, privileged CA policy",
+      "conditions": {
+        "jobTitle": { "operator": "exact", "value": "Security Engineer" }
+      },
+      "entitlements": {
+        "groups": [
+          { "id": "f6daa7ee-7873-4317-8b5b-59a059564fa7", "displayName": "SG_Security_Core",     "privileged": true  },
+          { "id": "a69f3794-1409-4df1-980f-7ee45504b157", "displayName": "SG_Security_Engineer", "privileged": true  },
+          { "id": "5d92e3c8-9d19-46da-b692-26297278084e", "displayName": "LIC_M365_E5",           "privileged": false },
+          { "id": "4e73e839-33a0-49cf-83bc-6b27a32866b5", "displayName": "LIC_Security_Addon",   "privileged": false },
+          { "id": "87a64cce-8b63-4b7e-8c1a-703a695ee2cc", "displayName": "CA_Privileged_Users",  "privileged": false }
+        ]
+      }
+    },
+
+    {
+      "id": "MAP-SECURITY-CONTRACTOR-001",
+      "description": "Security Contractor — security core, contractor group, E3, Security Addon, contractor CA policy",
+      "conditions": {
+        "jobTitle":       { "operator": "exact", "value": "Security Contractor" },
+        "employmentType": { "operator": "exact", "value": "Contractor" }
+      },
+      "entitlements": {
+        "groups": [
+          { "id": "f6daa7ee-7873-4317-8b5b-59a059564fa7", "displayName": "SG_Security_Core",       "privileged": true  },
+          { "id": "d7676462-a16b-46e9-8237-a13fe98b5980", "displayName": "SG_Security_Contractor", "privileged": true  },
+          { "id": "d18f0b08-1ab6-462b-95ff-707c88cc7e0b", "displayName": "LIC_M365_E3",             "privileged": false },
+          { "id": "4e73e839-33a0-49cf-83bc-6b27a32866b5", "displayName": "LIC_Security_Addon",     "privileged": false },
+          { "id": "081cf46b-806b-449f-a838-98cc0433b5d1", "displayName": "CA_Contractors",          "privileged": false }
+        ]
+      }
+    },
+
+    {
+      "id": "MAP-EMPLOYMENT-MANAGER-001",
+      "description": "Employment Manager — employment manager group, E5, privileged CA policy",
+      "conditions": {
+        "jobTitle": { "operator": "exact", "value": "Employment Manager" }
+      },
+      "entitlements": {
+        "groups": [
+          { "id": "ee6ad6f6-c73c-4d7b-b734-5de4a5a12f09", "displayName": "SG_Employment_Manager", "privileged": true  },
+          { "id": "5d92e3c8-9d19-46da-b692-26297278084e", "displayName": "LIC_M365_E5",             "privileged": false },
+          { "id": "87a64cce-8b63-4b7e-8c1a-703a695ee2cc", "displayName": "CA_Privileged_Users",    "privileged": false }
+        ]
+      }
+    },
+
+    {
+      "id": "MAP-EMPLOYMENT-STAFF-001",
+      "description": "Employment Staff — employment staff group, E3, standard CA policy",
+      "conditions": {
+        "jobTitle": { "operator": "exact", "value": "Employment Staff" }
+      },
+      "entitlements": {
+        "groups": [
+          { "id": "179c3709-d374-46c8-9d9e-8a189a5dab3d", "displayName": "SG_Employment_Staff",  "privileged": false },
+          { "id": "d18f0b08-1ab6-462b-95ff-707c88cc7e0b", "displayName": "LIC_M365_E3",           "privileged": false },
+          { "id": "3e67ae85-f761-46ce-b958-54ec38625736", "displayName": "CA_Standard_Users",    "privileged": false }
+        ]
+      }
+    },
+
+    {
+      "id": "MAP-EMPLOYMENT-INTERN-001",
+      "description": "Employment Intern — employment intern group, E3, standard CA policy",
+      "conditions": {
+        "jobTitle": { "operator": "exact", "value": "Employment Intern" }
+      },
+      "entitlements": {
+        "groups": [
+          { "id": "255b5ebf-40c1-4a3b-81c9-4d676e73bf5b", "displayName": "SG_Employment_Intern", "privileged": false },
+          { "id": "d18f0b08-1ab6-462b-95ff-707c88cc7e0b", "displayName": "LIC_M365_E3",           "privileged": false },
+          { "id": "3e67ae85-f761-46ce-b958-54ec38625736", "displayName": "CA_Standard_Users",    "privileged": false }
+        ]
+      }
+    },
+
+    {
+      "id": "MAP-EMPLOYMENT-CONTRACTOR-001",
+      "description": "Employment Contractor — employment contractor group, E3, contractor CA policy",
+      "conditions": {
+        "jobTitle":       { "operator": "exact", "value": "Employment Contractor" },
+        "employmentType": { "operator": "exact", "value": "Contractor" }
+      },
+      "entitlements": {
+        "groups": [
+          { "id": "3483f4a1-9dd3-403f-a3cd-3bb8d1961cd8", "displayName": "SG_Employment_Contractor", "privileged": false },
+          { "id": "d18f0b08-1ab6-462b-95ff-707c88cc7e0b", "displayName": "LIC_M365_E3",               "privileged": false },
+          { "id": "081cf46b-806b-449f-a838-98cc0433b5d1", "displayName": "CA_Contractors",            "privileged": false }
+        ]
+      }
+    }
+  ],
+
+  "rules": [
+    {
+      "id": "IDENT-001",
+      "description": "Disabled account remains in one or more privileged groups",
+      "category": "Identity",
+      "severity": "Critical",
+      "weight": 100,
+      "blocking": true,
+      "type": "Evaluate-PrivilegeDrift",
+      "parameters": {
+        "requireEnabled": true,
+        "scope": "PrivilegedGroups"
+      },
+      "suppressesOnMatch": []
+    },
+    {
+      "id": "IDENT-002",
+      "description": "Account has no UPN or malformed UPN",
+      "category": "Identity",
+      "severity": "High",
+      "weight": 70,
+      "blocking": true,
+      "type": "Evaluate-EmploymentAlignment",
+      "parameters": {
+        "field": "UserPrincipalName",
+        "validationPattern": "^[^@]+@[^@]+\\.[^@]+$"
+      },
+      "suppressesOnMatch": []
+    },
+    {
+      "id": "IDENT-003",
+      "description": "Account employment status is not Active or is unresolvable — covers missing HR record and Unknown status",
+      "category": "Identity",
+      "severity": "Medium",
+      "weight": 40,
+      "blocking": false,
+      "type": "Evaluate-EmploymentAlignment",
+      "parameters": {
+        "field": "EmploymentStatus",
+        "requiredValue": "Active",
+        "unknownTrigger": true,
+        "emitReason": true
+      },
+      "suppressesOnMatch": [],
+      "supersededBy": ""
+    },
+    {
+      "id": "ACCESS-001",
+      "description": "Intern or temporary worker assigned to a Manager-level privileged group",
+      "category": "Access",
+      "severity": "High",
+      "weight": 80,
+      "blocking": true,
+      "type": "Evaluate-EmploymentAlignment",
+      "parameters": {
+        "jobTitlePatterns": ["Intern","Trainee","Temporary","Contractor"],
+        "forbiddenGroupPatterns": ["Manager","Admin","Privileged","Tier0","Tier1"]
+      },
+      "supersededBy": "ENT-002",
+      "suppressesOnMatch": []
+    },
+    {
+      "id": "ACCESS-002",
+      "description": "Terminated or offboarded account retains active group memberships",
+      "category": "Access",
+      "severity": "Critical",
+      "weight": 100,
+      "blocking": true,
+      "type": "Evaluate-EmploymentAlignment",
+      "parameters": {
+        "terminatedStatuses": ["Terminated","Offboarded","Left","Resigned"],
+        "scope": "AllGroups"
+      },
+      "suppressesOnMatch": []
+    },
+    {
+      "id": "ACCESS-003",
+      "description": "Account is in both privileged and standard groups simultaneously",
+      "category": "Access",
+      "severity": "High",
+      "weight": 75,
+      "blocking": false,
+      "type": "Evaluate-PrivilegeDrift",
+      "parameters": {
+        "detectMixedMembership": true
+      },
+      "suppressesOnMatch": []
+    },
+    {
+      "id": "ENT-001",
+      "description": "Employment type not permitted for assigned group — flagged for review",
+      "category": "Access",
+      "severity": "High",
+      "weight": 70,
+      "blocking": false,
+      "type": "Evaluate-EntitlementModel",
+      "parameters": {
+        "checkEmployment": true,
+        "checkPrivilegedTier": false
+      },
+      "suppressesOnMatch": []
+    },
+    {
+      "id": "ENT-002",
+      "description": "Employment type not permitted for a privileged-tier group — block provisioning",
+      "category": "Access",
+      "severity": "Critical",
+      "weight": 100,
+      "blocking": true,
+      "type": "Evaluate-EntitlementModel",
+      "parameters": {
+        "checkEmployment": false,
+        "checkPrivilegedTier": true
+      },
+      "suppressesOnMatch": ["ACCESS-001"]
+    },
+    {
+      "id": "ENT-003",
+      "description": "User is in a group not defined in the entitlement model",
+      "category": "Access",
+      "severity": "Low",
+      "weight": 15,
+      "blocking": false,
+      "type": "Evaluate-EntitlementModel",
+      "parameters": {
+        "checkEmployment": false,
+        "checkPrivilegedTier": false,
+        "unknownGroupAlert": true
+      },
+      "_note": "Downgraded from High/50 to Low/15. Unmanaged group is a coverage gap, not a compliance failure.",
+      "suppressesOnMatch": []
+    },
+    {
+      "id": "JOIN-001",
+      "description": "Joiner: employment record not found — block provisioning",
+      "category": "Identity",
+      "severity": "Critical",
+      "weight": 100,
+      "blocking": true,
+      "type": "Evaluate-EmploymentAlignment",
+      "parameters": {
+        "joinerCheck": true,
+        "field": "EmploymentStatus",
+        "requiredValue": "Active",
+        "joinerWindowDays": 30
+      },
+      "suppressesOnMatch": []
+    },
+    {
+      "id": "JOIN-002",
+      "description": "Joiner: job title maps to restricted privileged group — block provisioning",
+      "category": "Access",
+      "severity": "High",
+      "weight": 80,
+      "blocking": true,
+      "type": "Evaluate-EmploymentAlignment",
+      "parameters": {
+        "joinerCheck": true,
+        "jobTitlePatterns": ["Intern","Trainee","Temporary"],
+        "forbiddenGroupPatterns": ["Manager","Admin","Privileged","Tier0","Tier1"],
+        "joinerWindowDays": 30
+      },
+      "suppressesOnMatch": []
+    },
+    {
+      "id": "ARCH-001",
+      "description": "Tier 0 asset managed by a non-Tier 0 account",
+      "category": "Architecture",
+      "severity": "Critical",
+      "weight": 100,
+      "blocking": true,
+      "type": "Evaluate-PrivilegeDrift",
+      "parameters": {
+        "tier0GroupPatterns": ["Tier0","DomainAdmins","EnterpriseAdmins","PrivilegedAccessWorkstation"],
+        "enforceTierIsolation": true
+      },
+      "suppressesOnMatch": []
+    },
+    {
+      "id": "ARCH-002",
+      "description": "Admin account used for day-to-day operations — no account separation",
+      "category": "Architecture",
+      "severity": "High",
+      "weight": 70,
+      "blocking": false,
+      "type": "Evaluate-PrivilegeDrift",
+      "parameters": {
+        "detectAdminAccountDualUse": true,
+        "adminAccountPatterns": ["adm_","admin.","_admin","svc_"]
+      },
+      "suppressesOnMatch": []
+    },
+    {
+      "id": "ARCH-003",
+      "description": "Service account is in interactive user groups",
+      "category": "Architecture",
+      "severity": "High",
+      "weight": 65,
+      "blocking": false,
+      "type": "Evaluate-PrivilegeDrift",
+      "parameters": {
+        "serviceAccountPatterns": ["svc_","_svc","service.",".svc"],
+        "forbiddenGroupPatterns": ["AllUsers","Staff","Employees","InteractiveUsers"]
+      },
+      "suppressesOnMatch": []
+    },
+    {
+      "id": "HYG-001",
+      "description": "Account has not signed in for more than 90 days",
+      "category": "Hygiene",
+      "severity": "Medium",
+      "weight": 35,
+      "blocking": false,
+      "type": "Evaluate-EmploymentAlignment",
+      "parameters": {
+        "field": "LastSignInDateTime",
+        "maxInactiveDays": 90
+      },
+      "supersededBy": "HYG-002",
+      "suppressesOnMatch": []
+    },
+    {
+      "id": "HYG-002",
+      "description": "Account has not signed in for more than 180 days — stale",
+      "category": "Hygiene",
+      "severity": "High",
+      "weight": 65,
+      "blocking": false,
+      "type": "Evaluate-EmploymentAlignment",
+      "parameters": {
+        "field": "LastSignInDateTime",
+        "maxInactiveDays": 180
+      },
+      "_dataNote": "Requires AuditLog.Read.All scope. Without it, LastSignInDateTime is null for all users and this rule fires tenant-wide.",
+      "suppressesOnMatch": ["HYG-001"]
+    },
+    {
+      "id": "HYG-003",
+      "description": "Account password has not been changed in over 365 days",
+      "category": "Hygiene",
+      "severity": "Medium",
+      "weight": 40,
+      "blocking": false,
+      "type": "Evaluate-EmploymentAlignment",
+      "parameters": {
+        "field": "LastPasswordChangeDateTime",
+        "maxAgeDays": 365
+      },
+      "suppressesOnMatch": []
+    },
+    {
+      "id": "HYG-004",
+      "description": "Privileged account has no MFA registered or enforced",
+      "category": "Hygiene",
+      "severity": "Critical",
+      "weight": 100,
+      "blocking": true,
+      "type": "Evaluate-PrivilegeDrift",
+      "parameters": {
+        "requireMFA": true,
+        "scope": "PrivilegedGroups"
+      },
+      "suppressesOnMatch": []
+    },
+    {
+      "id": "RBAC-001",
+      "description": "Direct Azure role assignment detected — must be group-based",
+      "category": "RBAC",
+      "severity": "High",
+      "weight": 80,
+      "blocking": false,
+      "type": "Evaluate-DirectRoleAssignments",
+      "parameters": {
+        "allowedAssignmentTypes": ["Group"]
+      },
+      "supersededBy": "RBAC-003",
+      "suppressesOnMatch": []
+    },
+    {
+      "id": "RBAC-002",
+      "description": "Privileged role assigned at subscription scope — must be resource-group or below",
+      "category": "RBAC",
+      "severity": "High",
+      "weight": 75,
+      "blocking": false,
+      "type": "Evaluate-DirectRoleAssignments",
+      "parameters": {
+        "forbiddenScopes": ["/subscriptions/"],
+        "privilegedRoles": ["Owner","Contributor","User Access Administrator"]
+      },
+      "supersededBy": "RBAC-003",
+      "_note": "Suppressed by RBAC-003 when a forbidden role is also present for the same entity.",
+      "suppressesOnMatch": []
+    },
+    {
+      "id": "RBAC-003",
+      "description": "Owner role assigned directly to a user at any scope",
+      "category": "RBAC",
+      "severity": "Critical",
+      "weight": 100,
+      "blocking": true,
+      "type": "Evaluate-DirectRoleAssignments",
+      "parameters": {
+        "forbiddenRoles": ["Owner"],
+        "assignmentType": "User"
+      },
+      "suppressesOnMatch": ["RBAC-002","RBAC-001"],
+      "_note": "Primary rule for Owner assignment. Suppresses RBAC-002 and RBAC-001 when all three would fire for same entity."
+    },
+    {
+      "id": "CORR-001",
+      "description": "Privileged-tier group member holds Owner or UAA role at subscription scope",
+      "category": "Correlation",
+      "severity": "Critical",
+      "weight": 100,
+      "blocking": true,
+      "type": "Evaluate-CrossPlaneExposure",
+      "parameters": {
+        "requirePrivilegedTier": true,
+        "forbiddenRoles": ["Owner","User Access Administrator"],
+        "forbiddenScopes": ["/subscriptions/"]
+      },
+      "suppressesOnMatch": ["CORR-004"]
+    },
+    {
+      "id": "CORR-002",
+      "description": "Disabled account retains active Azure RBAC role assignments",
+      "category": "Correlation",
+      "severity": "Critical",
+      "weight": 100,
+      "blocking": true,
+      "type": "Evaluate-CrossPlaneExposure",
+      "parameters": {
+        "requireEnabled": true,
+        "requireActiveRbac": true
+      },
+      "suppressesOnMatch": []
+    },
+    {
+      "id": "CORR-003",
+      "description": "Non-Full-time worker holds a privileged Azure RBAC role",
+      "category": "Correlation",
+      "severity": "High",
+      "weight": 85,
+      "blocking": true,
+      "type": "Evaluate-CrossPlaneExposure",
+      "parameters": {
+        "restrictedEmploymentTypes": ["Intern","Contractor","Temporary"],
+        "privilegedRoles": ["Owner","Contributor","User Access Administrator"]
+      },
+      "suppressesOnMatch": []
+    },
+    {
+      "id": "CORR-004",
+      "description": "Privileged-tier identity also has a direct Azure role assignment",
+      "category": "Correlation",
+      "severity": "High",
+      "weight": 75,
+      "blocking": false,
+      "type": "Evaluate-CrossPlaneExposure",
+      "parameters": {
+        "requirePrivilegedTier": true,
+        "assignmentType": "User"
+      },
+      "supersededBy": "CORR-001",
+      "suppressesOnMatch": []
+    },
+    {
+      "id": "CORR-005",
+      "description": "Account inactive over 90 days but retains Azure RBAC roles",
+      "category": "Correlation",
+      "severity": "High",
+      "weight": 70,
+      "blocking": false,
+      "type": "Evaluate-CrossPlaneExposure",
+      "parameters": {
+        "maxInactiveDays": 90,
+        "requireActiveRbac": true
+      },
+      "suppressesOnMatch": []
+    }
+  ]
+}

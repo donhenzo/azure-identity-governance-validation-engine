@@ -88,6 +88,29 @@ A blocking rule sets `ComplianceStatus = Blocking` in FullScan and `Decision = F
 
 ---
 
+## Entitlement Model and Mapping Rules
+
+`Rules.json` contains three distinct sections:
+
+**`entitlementModel`** — defines every governed group with its allowed employment types, access tier, and privilege classification. The validation engine reads this to evaluate ENT-001, ENT-002, ENT-003, and all privilege-sensitive rules.
+
+**`mappingRules`** — drives JML provisioning. Each rule matches a canonical job title and employment type from the HR payload and defines the exact groups the identity receives, including Entra ID Object IDs and inline `privileged` flags. The mapping resolver reads this section at provisioning time.
+
+**`rules`** — the 26 governance rules evaluated by the processor layer on every scan.
+
+### Privilege Classification
+
+Privilege is resolved from **two sources in combination**, not tier alone:
+
+- `_privilegedTiers` in the entitlement model — catches groups whose tier is `Manager` or `Manager/Staff`
+- `privileged: true` on individual group entries — catches groups that are operationally sensitive regardless of tier
+
+This means groups like `SG_Security_Core` (tier: `Base`) and `SG_Security_Engineer` (tier: `Base/Staff`) are correctly treated as privileged. `IDRuleProcessor` and `CorrelationRuleProcessor` both read the entitlement model flag directly — rules HYG-004, CORR-001, and CORR-004 are all affected by this classification.
+
+The `privileged` flag on mapping rule group entries is the authoritative source for PreProvision correlation checks. It is declared inline with the group assignment so the two cannot drift apart.
+
+---
+
 ## Risk Scoring
 
 ```
@@ -127,19 +150,18 @@ RiskScore = Min( RawWeightSum / 900 × 100, 100.0 )
 ```
 ValidationEngine/
 ├── ValidationEngine.ps1          # Entry point · -Mode · -TargetUserId · switches
-├── DataCollector.ps1             # Orchestrates collection layer
-├── RuleProcessor.ps1             # Orchestrates rule evaluation
-├── RiskClassifier.ps1            # Classification · no API calls · no rule logic
-├── ReportGenerator.ps1           # Output generation
-├── Rules.json                    # Declarative rule definitions · weights · suppression
+├── Rules.json                    # Entitlement model · mapping rules · governance rules (v3.0.0)
 ├── Collectors/
 │   ├── IdentityCollector.ps1
 │   └── RbacCollector.ps1
 ├── Rules/
 │   ├── FindingSchema.ps1         # New-ComplianceFinding · Invoke-SuppressionPass
-│   ├── IDRuleProcessor.ps1
+│   ├── IDRuleProcessor.ps1       # Reads privileged flag from entitlement model
 │   ├── RbacRuleProcessor.ps1
-│   └── CorrelationRuleProcessor.ps1
+│   └── CorrelationRuleProcessor.ps1  # Reads privileged flag from entitlement model
+├── Reporting/
+│   ├── RiskClassifier.ps1        # Classification · no API calls · no rule logic
+│   └── ReportGenerator.ps1       # Output generation
 └── Tests/
     └── Test-*.ps1                # Unit tests per module
 ```
@@ -152,6 +174,7 @@ ValidationEngine/
 - **Fixed scoring cap** — adding new rules without updating the 900 cap will compress existing scores. Cap derivation from the active rule set is a planned improvement.
 - **Sequential subscription enumeration** — RBAC collection processes one subscription at a time. Parallelisation is documented but not yet implemented.
 - **No PIM visibility** — eligible role assignments via Privileged Identity Management are not currently evaluated.
+- **New groups are currently empty** — the entitlement model has been updated to the standardised group structure. Existing tenant members are still in legacy groups pending migration in Phase 1 of the JML build. FullScan findings against the new group structure will not be meaningful until migration is complete.
 
 ---
 
@@ -163,7 +186,9 @@ ValidationEngine/
 | Rule evaluation (26 rules) | ✅ Stable |
 | Classification · all 3 modes | ✅ Stable |
 | Output layer | ✅ Stable |
-| JML orchestration | 🔧 In development |
+| Rules.json · entitlement model + mapping rules | ✅ Updated — v3.0.0 |
+| Privilege flag read · IDRuleProcessor + CorrelationRuleProcessor | ✅ Updated |
+| JML orchestration | 🔧 In development — Phase 1 Joiner next |
 
 ---
 
