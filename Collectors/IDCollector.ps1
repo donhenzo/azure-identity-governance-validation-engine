@@ -20,11 +20,9 @@
 
 Set-StrictMode -Version Latest
 
-# ---------------------------------------------------------------------------
+
 # Writes non-fatal Graph errors to CSV if a log path is provided.
 # If no log path is set, errors are silently ignored.
-# ---------------------------------------------------------------------------
-
 function Write-IdentityCollectionError {
     param([string]$Source, [string]$Detail, [string]$LogPath)
 
@@ -37,18 +35,15 @@ function Write-IdentityCollectionError {
     } | Export-Csv -LiteralPath $LogPath -Append -NoTypeInformation -Encoding UTF8
 }
 
-# ---------------------------------------------------------------------------
+
 # Retrieves all users with only the fields needed by the engine.
 # Avoids pulling unnecessary properties hence reducing API payload.
-# ---------------------------------------------------------------------------
-
 function Get-IdentityUsers {
     [OutputType([System.Collections.Generic.List[PSCustomObject]])]
     param()
 
-    # ---------------------------------------------------------------------------
+
     # Base properties — available on all Entra license tiers
-    # ---------------------------------------------------------------------------
     $properties = @(
         'id','displayName','userPrincipalName','accountEnabled',
         'jobTitle','department','employeeType','employeeId',
@@ -57,12 +52,11 @@ function Get-IdentityUsers {
         'assignedLicenses','mail','userType','externalUserState'
     )
 
-    # ---------------------------------------------------------------------------
+  
     # Capability detection — signInActivity requires Entra ID P1 or P2.
     # We probe for it with a single-user call before committing to the full scan.
     # If the probe succeeds, we include it for all users.
     # If it fails (403), we proceed without it and LastSignInDateTime stays null.
-    # ---------------------------------------------------------------------------
     $includeSignIn = $false
 
     try {
@@ -81,7 +75,6 @@ function Get-IdentityUsers {
     $users = [System.Collections.Generic.List[PSCustomObject]]::new()
 
     try {
-        # ---------------------------------------------------------------------------
         # NOTE — Entra ID P1 or P2 license required for advanced query parameters:
         # -ConsistencyLevel eventual and -CountVariable enable server-side filtering
         # and accurate counts but require a premium license.
@@ -91,7 +84,6 @@ function Get-IdentityUsers {
         #
         # STANDARD (works on all license tiers):
         $page = Get-MgUser -All -Property ($properties -join ',')
-        # ---------------------------------------------------------------------------
 
         foreach ($user in $page) {
 
@@ -130,13 +122,11 @@ function Get-IdentityUsers {
     return $users
 }
 
-# ---------------------------------------------------------------------------
+
 # Retrieves all groups and marks which ones are considered privileged.
 # A group is privileged if:
 #   - It is role-assignable, OR
 #   - Its name matches configured privilege patterns.
-# ---------------------------------------------------------------------------
-
 function Get-IdentityGroups {
     [OutputType([System.Collections.Generic.List[PSCustomObject]])]
     param(
@@ -189,11 +179,9 @@ function Get-IdentityGroups {
     return $groups
 }
 
-# ---------------------------------------------------------------------------
+
 # Builds a lookup table of UserId -> list of GroupIds.
 # Errors for individual groups are logged but do not stop the process.
-# ---------------------------------------------------------------------------
-
 function Get-IdentityMemberships {
     [OutputType([hashtable])]
     param(
@@ -227,11 +215,9 @@ function Get-IdentityMemberships {
     return $map
 }
 
-# ---------------------------------------------------------------------------
+
 # Converts raw HR / directory fields into simplified employment states.
 # Rules rely on this normalized value, not raw attributes.
-# ---------------------------------------------------------------------------
-
 function Resolve-EmploymentStatus {
     [OutputType([string])]
     param([Parameter(Mandatory)] [PSCustomObject] $User)
@@ -250,11 +236,9 @@ function Resolve-EmploymentStatus {
     return 'Unknown'
 }
 
-# ---------------------------------------------------------------------------
+
 # Checks whether a user has any non-password authentication method registered.
 # Optional due to performance and Graph throttling.
-# ---------------------------------------------------------------------------
-
 function Resolve-MfaState {
     [OutputType([bool])]
     param(
@@ -283,10 +267,8 @@ function Resolve-MfaState {
     }
 }
 
-# ---------------------------------------------------------------------------
-# Marks users as privileged if they belong to any privileged group.
-# ---------------------------------------------------------------------------
 
+# Marks users as privileged if they belong to any privileged group.
 function Set-UserPrivilegeFlag {
     param(
         [System.Collections.Generic.List[PSCustomObject]] $Users,
@@ -314,12 +296,10 @@ function Set-UserPrivilegeFlag {
     }
 }
 
-# ---------------------------------------------------------------------------
+
 # Public entry point.
 # Builds and returns a full identity snapshot for the engine.
 # Supports optional single-user mode (PreProvision).
-# ---------------------------------------------------------------------------
-
 function Get-IdentitySnapshot {
 
     [CmdletBinding()]
@@ -383,7 +363,7 @@ function Get-IdentitySnapshot {
     }
 }
 
-# ---------------------------------------------------------------------------
+
 # New-IdentitySnapshotFromPayload
 # Builds a synthetic identity snapshot from a JML canonical identity object.
 # Used by the validation engine PreProvision path when the user does not yet
@@ -398,8 +378,6 @@ function Get-IdentitySnapshot {
 # Security:     UPN duplicate check must still be performed separately by the
 #               JML engine via Graph before provisioning executes. This function
 #               does not query Entra ID and cannot detect conflicts.
-# ---------------------------------------------------------------------------
-
 function New-IdentitySnapshotFromPayload {
     [CmdletBinding()]
     [OutputType([PSCustomObject])]

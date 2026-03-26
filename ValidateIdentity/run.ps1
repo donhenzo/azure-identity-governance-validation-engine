@@ -106,7 +106,6 @@ try {
     # Translate internal engine result to the HTTP response contract.
     # Blocking = true  → failures (hard block, provisioning must not proceed)
     # Blocking = false → warnings (logged in report, provisioning continues)
-    #
     # Exception: HYG-* findings in PostProvision mode are demoted to warnings.
     # Rules like MFA state, inactivity, and password age are operational signals —
     # they cannot be enforced at the point of provisioning and should not fail

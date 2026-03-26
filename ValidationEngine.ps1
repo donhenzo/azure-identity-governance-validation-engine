@@ -1,29 +1,45 @@
 <#
 .SYNOPSIS
-    ValidationEngine.ps1 — Orchestration entry point. Wires all collectors and processors.
+    ValidationEngine.ps1 — machine entry point. Connects all collectors and processors.
+    Handles PreProvision (payload-based), PostProvision (tenant verification),
+    FullScan, and DriftOnly execution modes.
 
 .DESCRIPTION
     Execution order:
-        1. IdentityCollector  → identity snapshot (Graph)
-        2. RbacCollector      → RBAC snapshot (Azure, all subscriptions)
+        1. IdentityCollector       → identity snapshot (Graph)
+        2. RbacCollector           → RBAC snapshot (Azure, all subscriptions)
         3. IdentityRuleProcessor   → Identity / Access / Architecture / Hygiene findings
         4. RbacRuleProcessor       → RBAC findings
         5. CorrelationRuleProcessor → cross-plane findings
-        6. RiskClassifier     → aggregate + classify
-        7. ReportGenerator    → output + export
+        6. RiskClassifier          → aggregate + classify
+        7. ReportGenerator         → output + export
 
     This is the only file that calls across layer boundaries.
 
+    HOW POSTPROVISION WORKS:
+        PostProvision is not a separate -Mode value. The HTTP trigger in
+        run.ps1 maps a PostProvision request to -Mode PreProvision -TargetUserId.
+        The engine then fetches the real Entra object via Get-UserSnapshot (3 Graph
+        calls, O(1)) and evaluates it against the same rule set. The difference from
+        a standard PreProvision run is that the user already exists in the tenant,
+        so the snapshot reflects actual provisioned state rather than a synthetic payload.
+
 .PARAMETER Mode
-    PreProvision — single user, blocking rules only, returns Pass/Fail
-    FullScan     — all users, all rules, full metrics
-    DriftOnly    — Architecture / RBAC / Correlation categories, fast scan
+    PreProvision — single user evaluation. Accepts either -IdentityPayload (user does
+                   not exist yet, synthetic snapshot) or -TargetUserId (user exists,
+                   live snapshot). Both pre-provision checks and post-provision
+                   verification run under this mode.
+    FullScan     — all users, all rules, full metrics across the entire tenant.
+    DriftOnly    — Architecture / RBAC / Correlation categories only, fast scan.
 
 .PARAMETER RulesPath
     Path to Rules.json. Defaults to .\Rules.json
 
 .PARAMETER TargetUserId
-    Required for PreProvision. Azure AD Object ID of the user being evaluated.
+    Entra ID Object ID of the user to evaluate. Used in two scenarios:
+        PreProvision — passed directly by the JML engine for a targeted single-user check.
+        PostProvision — run.ps1 maps a PostProvision HTTP request to PreProvision + TargetUserId,
+                        so this parameter is also how post-provision tenant verification is triggered.
 
 .PARAMETER TargetDisplayName
     Optional display name used in PreProvision console output.
@@ -38,10 +54,10 @@
     Export findings to CSV or JSON (FullScan / DriftOnly only).
 
 .PARAMETER StoreDriftState
-    Save this FullScan result for drift comparison on the next run.
+    Saves the FullScan result for drift comparison on the next run.
 
 .PARAMETER ResolveMfa
-    Check MFA per user during identity collection. Adds latency.
+    Check MFA per user during identity collection. Adds latency (optional)
 
 .PARAMETER SubscriptionFilter
     Limit RBAC collection to specific subscription IDs. Empty = all.
@@ -279,7 +295,7 @@ else {
     foreach ($u in $identitySnapshot.Users) { $allEntityIds.Add($u.UserId) }
 
     # Add any Group or ServicePrincipal principals from RBAC findings that
-    # aren't already in the list — these won't be in the identity snapshot
+    # aren't already in the list, these won't be in the identity snapshot
     # but must still receive a risk state so their findings aren't dropped
     $userIdSet = [System.Collections.Generic.HashSet[string]]::new(
         $allEntityIds, [System.StringComparer]::OrdinalIgnoreCase

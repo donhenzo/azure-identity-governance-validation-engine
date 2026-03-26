@@ -24,17 +24,13 @@
 
 Set-StrictMode -Version Latest
 
-# ──────────────────────────────────────────────────────────────────────────────
-#  CONSTANTS
-# ──────────────────────────────────────────────────────────────────────────────
 
+#  CONSTANTS
 $Script:DefaultOutputDir  = Join-Path $PSScriptRoot 'Output'
 $Script:LastRunStateFile  = Join-Path $Script:DefaultOutputDir 'LastRunState.json'
 
-# ──────────────────────────────────────────────────────────────────────────────
-#  PRIVATE HELPERS
-# ──────────────────────────────────────────────────────────────────────────────
 
+#  PRIVATE HELPERS
 function Ensure-ReportOutputDirectory {
     param([string] $Path)
     if (-not (Test-Path -LiteralPath $Path)) {
@@ -136,10 +132,8 @@ function Format-ReportSeverityBar {
     return "  Blocking: $Blocking  |  NonCompliant: $NonCompliant  |  Compliant: $Compliant"
 }
 
-# ──────────────────────────────────────────────────────────────────────────────
-#  PUBLIC — PreProvision Report
-# ──────────────────────────────────────────────────────────────────────────────
 
+#  PUBLIC — PreProvision Report
 function Write-PreProvisionReport {
     <#
     .SYNOPSIS
@@ -179,10 +173,8 @@ function Write-PreProvisionReport {
     Write-Host ''
 }
 
-# ──────────────────────────────────────────────────────────────────────────────
-#  PUBLIC — FullScan / DriftOnly Report
-# ──────────────────────────────────────────────────────────────────────────────
 
+#  PUBLIC — FullScan / DriftOnly Report
 function Write-GovernanceReport {
     <#
     .SYNOPSIS
@@ -223,7 +215,7 @@ function Write-GovernanceReport {
     $summary      = $ClassificationResult.Summary
     $userStates   = $ClassificationResult.EntityRiskStates
 
-    # ── Load Previous State for Drift ────────────────────────────────────────
+    # Load Previous State for Drift 
     $previousState = Load-ReportLastRunState -StatePath $Script:LastRunStateFile
     $drift         = $null
 
@@ -231,7 +223,7 @@ function Write-GovernanceReport {
         $drift = Calculate-ReportDriftTrend -Current $summary -Previous $previousState
     }
 
-    # ── Console Output ────────────────────────────────────────────────────────
+    # Console Output 
     Write-Host ''
     Write-Host '╔══════════════════════════════════════════════════════════════╗' -ForegroundColor Cyan
     Write-Host "║        GOVERNANCE VALIDATION REPORT  [$mode]" -ForegroundColor Cyan
@@ -279,7 +271,7 @@ function Write-GovernanceReport {
         Write-Host ''
     }
 
-    # ── Critical/High Users Spotlight ────────────────────────────────────────
+    # Critical/High Users Spotlight
     $spotlightUsers = @($userStates |
         Where-Object { $_.ComplianceStatus -in @('Blocking', 'NonCompliant') } |
         Sort-Object RiskScore -Descending |
@@ -302,7 +294,7 @@ function Write-GovernanceReport {
     Write-Host '══════════════════════════════════════════════════════════════' -ForegroundColor Cyan
     Write-Host ''
 
-    # ── Export Findings ───────────────────────────────────────────────────────
+    # Export Findings
     # Flatten all findings from all entity risk states into one list
     $allFindings = [System.Collections.Generic.List[PSCustomObject]]::new()
     foreach ($u in $userStates) {
@@ -387,7 +379,7 @@ function Write-GovernanceReport {
         }
     }
 
-    # ── Store Drift State ─────────────────────────────────────────────────────
+    # Store Drift State 
     if ($StoreDriftState -and $mode -eq 'FullScan') {
         Save-ReportLastRunState -StatePath $Script:LastRunStateFile -Summary $summary -RunTimestamp $runTimestamp
         Write-Host "  [State] Run state saved for next drift comparison." -ForegroundColor Gray
@@ -396,10 +388,8 @@ function Write-GovernanceReport {
     Write-Host ''
 }
 
-# ──────────────────────────────────────────────────────────────────────────────
-#  PUBLIC — Get-GovernanceMetrics  (programmatic access, no console output)
-# ──────────────────────────────────────────────────────────────────────────────
 
+#  PUBLIC — Get-GovernanceMetrics  (programmatic access, no console output)
 function Get-GovernanceMetrics {
     <#
     .SYNOPSIS
