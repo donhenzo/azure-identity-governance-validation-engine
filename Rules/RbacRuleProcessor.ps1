@@ -249,5 +249,5 @@ function Invoke-RbacRuleEngine {
     # scope-aware RBAC-specific pass above.
     $allFindings = Invoke-SuppressionPass -Findings $allFindings -RulesDocument $RulesDocument
 
-    return $allFindings
+    return ,$allFindings
 }

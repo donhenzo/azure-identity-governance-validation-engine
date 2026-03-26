@@ -324,11 +324,13 @@ function Invoke-CorrelationRuleEngine {
         }
     }
 
-    # Remove findings superseded by a more specific rule firing on the same entity.
-    # Suppression chains are declared in Rules.json — no hardcoded logic here.
+# Guard: only run suppression pass if there are findings.
+# An empty List[PSCustomObject] unwraps to $null under Set-StrictMode
+# which causes SuppressionPass to reject the Findings parameter.
+if ($allFindings.Count -gt 0) {
     $allFindings = Invoke-SuppressionPass `
         -Findings      $allFindings `
         -RulesDocument $RulesDocument
-
-    return $allFindings
+}
+return ,$allFindings
 }

@@ -586,5 +586,5 @@ function Invoke-IdentityRuleEngine {
     # Suppression chains are declared in Rules.json — no hardcoded logic here.
     $allFindings = Invoke-SuppressionPass -Findings $allFindings -RulesDocument $RulesDocument
 
-    return $allFindings
+    return ,$allFindings
 }

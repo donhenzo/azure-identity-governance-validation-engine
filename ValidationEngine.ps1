@@ -61,6 +61,7 @@ param(
     [Parameter()] [string]   $RulesPath          = (Join-Path $PSScriptRoot 'Rules.json'),
     [Parameter()] [string]   $TargetUserId        = '',
     [Parameter()] [string]   $TargetDisplayName   = '',
+    [Parameter()] [string]   $IdentityPayload     = '',
     [Parameter()] [string]   $OutputDir           = (Join-Path $PSScriptRoot 'Output'),
     [Parameter()] [string]   $ErrorLogPath        = '',
     [Parameter()] [switch]   $ExportCsv,
@@ -88,8 +89,13 @@ $root = $PSScriptRoot
 
 
 # Validate
-if ($Mode -eq 'PreProvision' -and [string]::IsNullOrWhiteSpace($TargetUserId)) {
-    throw 'ValidationEngine: -TargetUserId is required for PreProvision mode.'
+if ($Mode -eq 'PreProvision') {
+    $hasTargetUser    = -not [string]::IsNullOrWhiteSpace($TargetUserId)
+    $hasPayload       = -not [string]::IsNullOrWhiteSpace($IdentityPayload)
+
+    if (-not $hasTargetUser -and -not $hasPayload) {
+        throw 'ValidationEngine: PreProvision mode requires either -TargetUserId or -IdentityPayload.'
+    }
 }
 
 if (-not (Test-Path -LiteralPath $RulesPath)) {
@@ -115,6 +121,7 @@ Write-Verbose 'ValidationEngine: [1/5] Collecting identity data...'
 # for groups not in the model (legacy naming like Admin, Tier0, etc.).
 # Without this exact list, Exec_Team and HR_Mangers would not be flagged as privileged
 # because their display names don't contain the tier string 'Manager'.
+
 $privilegedGroupNames = [System.Collections.Generic.List[string]]::new()
 if ($rulesDocument.entitlementModel -and $rulesDocument.entitlementModel.groups) {
     $privTierSet = [System.Collections.Generic.HashSet[string]]::new(
@@ -128,15 +135,59 @@ if ($rulesDocument.entitlementModel -and $rulesDocument.entitlementModel.groups)
     }
 }
 
-$identityParams = @{
-    PrivilegedGroupPatterns = @([string[]]$rulesDocument.entitlementModel._privilegedTiers + @('Admin', 'Tier0', 'Tier1'))
-    PrivilegedGroupNames    = $privilegedGroupNames.ToArray()
-    ErrorLogPath            = $ErrorLogPath
-    ResolveMfa              = $ResolveMfa
-}
-if ($TargetUserId) { $identityParams['TargetUserId'] = $TargetUserId }
 
-$identitySnapshot = Get-IdentitySnapshot @identityParams
+# Route to the correct collector based on mode and parameters.
+#
+#   PreProvision + IdentityPayload  → synthetic snapshot, zero Graph calls
+#                                     user does not exist in Entra yet
+#
+#   PreProvision + TargetUserId     → Get-UserSnapshot: 3 Graph calls, O(1)
+#                                     used for PostProvision verification
+#                                     and targeted pre-provision checks
+#
+#   FullScan / DriftOnly            → Get-IdentitySnapshot: full tenant scan
+#                                     fetches all users, groups, memberships
+
+if ($Mode -eq 'PreProvision' -and -not [string]::IsNullOrWhiteSpace($IdentityPayload)) {
+
+    # Payload path, user does not exist yet, build synthetic snapshot
+    $payloadObject    = $IdentityPayload | ConvertFrom-Json
+    $identitySnapshot = New-IdentitySnapshotFromPayload -Payload $payloadObject
+    $TargetUserId     = $identitySnapshot.Users[0].UserId
+
+} elseif ($Mode -eq 'PreProvision' -and -not [string]::IsNullOrWhiteSpace($TargetUserId)) {
+
+    # Targeted path, fetch only this user, their memberships, and licenses.
+    # O(1) regardless of tenant size. Used for PostProvision verification.
+    try {
+        $identitySnapshot = Get-UserSnapshot -UserId $TargetUserId
+    }
+    catch {
+        $result = [PSCustomObject]@{
+            EntityId      = $TargetUserId
+            EntityType    = 'User'
+            Decision      = 'Fail'
+            BlockingCount = 1
+            Reasons       = @("Could not fetch user from directory: $_")
+            Findings      = @()
+            Mode          = 'PreProvision'
+            EvaluatedAt   = [datetime]::UtcNow.ToString('o')
+        }
+        Write-PreProvisionReport -ClassificationResult $result -TargetDisplayName $TargetDisplayName
+        return $result
+    }
+
+} else {
+
+    # Full tenant scan — FullScan and DriftOnly only
+    $identityParams = @{
+        PrivilegedGroupPatterns = @([string[]]$rulesDocument.entitlementModel._privilegedTiers + @('Admin', 'Tier0', 'Tier1'))
+        PrivilegedGroupNames    = $privilegedGroupNames.ToArray()
+        ErrorLogPath            = $ErrorLogPath
+        ResolveMfa              = $ResolveMfa
+    }
+    $identitySnapshot = Get-IdentitySnapshot @identityParams
+}
 
 if ($identitySnapshot.Users.Count -eq 0) {
     if ($Mode -eq 'PreProvision') {
@@ -259,6 +310,8 @@ $classificationResult = Invoke-RiskClassification @classifyParams
 
 $enrichmentMap = [hashtable]::new([System.StringComparer]::OrdinalIgnoreCase)
 
+if ($Mode -ne 'PreProvision') {
+
 # Index group names by GroupId for fast membership resolution
 $groupNameById = [hashtable]::new([System.StringComparer]::OrdinalIgnoreCase)
 foreach ($g in $identitySnapshot.Groups) {
@@ -365,7 +418,7 @@ foreach ($rs in $classificationResult.EntityRiskStates) {
         }
     }
 }
-
+}
 
 # STEP 5 — Report
 
