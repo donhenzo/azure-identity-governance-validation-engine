@@ -293,7 +293,21 @@
         ]
       }
     },
-
+{
+  "id": "MAP-IT-DIRECTOR-001",
+  "description": "Director of IT — IT core, IT manager group, E5, privileged CA policy",
+  "conditions": {
+    "jobTitle": { "operator": "exact", "value": "Director of IT" }
+  },
+  "entitlements": {
+    "groups": [
+      { "id": "fc34a451-4897-4139-88e8-6464cd2f4a85", "displayName": "SG_IT_Core",          "privileged": false },
+      { "id": "49349779-b40b-4989-af0c-bf2c78c459e1", "displayName": "SG_IT_Manager",       "privileged": true  },
+      { "id": "5d92e3c8-9d19-46da-b692-26297278084e", "displayName": "LIC_M365_E5",          "privileged": false },
+      { "id": "87a64cce-8b63-4b7e-8c1a-703a695ee2cc", "displayName": "CA_Privileged_Users", "privileged": false }
+    ]
+  }
+    },
     {
       "id": "MAP-EXEC-FINANCE-001",
       "description": "Executive Finance — executive core, finance executive group, finance department membership",

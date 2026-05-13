@@ -277,6 +277,7 @@ Rule weights range from 15 (Low) to 100 (Critical). The fixed cap of 900 ensures
 | Phase 1 | Joiner provisioning pipeline | PreProvision gate · PostProvision gate · ENT-004 · ENT-002 | ✅ Complete |
 | Phase 2 | PIM eligible role assignment | PIM-001 · PimSchedules in Get-UserSnapshot | ✅ Complete |
 | Phase 3 | Mover — delta recalculation | Planned | 📋 Designed |
+| HR API  | BambooHR ingestion · action derivation · delta polling | Validation engine called unchanged via HTTP | ✅ Complete |
 | Phase 4 | Leaver — full revocation | Planned | 📋 Designed |
 
 ---
@@ -307,7 +308,10 @@ Connect-MgGraph -Scopes "User.Read.All","Group.Read.All","Directory.Read.All","R
 # As part of JML pipeline — start the HTTP trigger
 func start
 # JML engine calls POST /api/validate automatically
+# Works identically whether the JML engine ingests via CSV or BambooHR API
 ```
+
+**The validation engine has no knowledge of the HR source.** It receives a canonical `IdentityPayload` or an Entra object ID via HTTP and evaluates it. Whether that payload originated from a CSV row or a BambooHR API call makes no difference to the engine — the HTTP contract is the boundary.
 
 ---
 
