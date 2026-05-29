@@ -1,6 +1,6 @@
 {
   "version": "3.0.0",
-  "lastModified": "2026-03-16",
+  "lastModified": "2026-05-26",
 
   "entitlementModel": {
     "_comment": "Governed groups with allowed employment types, tier, and privilege classification. The privileged flag is the authoritative source for JML provisioning decisions. Tier drives validation engine rule evaluation.",
@@ -1113,6 +1113,29 @@
         "requireActiveRbac": true
       },
       "suppressesOnMatch": []
-    }
+    }, 
+    {
+  "id": "SOD-EVAL-001",
+  "description": "Identity holds group memberships that constitute a Separation of Duties conflict as defined in sod_policies.json",
+  "category": "SoD",
+  "severity": "Critical",
+  "weight": 100,
+  "blocking": true,
+  "type": "Evaluate-SoDConflict",
+  "parameters": {
+    "sodPoliciesPath": "sod_policies.json",
+    "warnSeverity": "High",
+    "warnWeight": 70
+  },
+  "suppressesOnMatch": []
+}
   ]
 }
+
+
+
+
+
+
+
+
