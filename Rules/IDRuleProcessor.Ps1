@@ -204,46 +204,48 @@ function Evaluate-SoDConflict {
     <#
     .SYNOPSIS
         Evaluates group memberships against the SoD policy catalogue in sod_policies.json.
- 
+
     .DESCRIPTION
         Implements the ANY_TO_ANY intersection model:
             A violation fires when an identity holds at least one group from set_a
             AND at least one group from set_b simultaneously.
- 
+
         This is the PowerShell-native SoD evaluation. It reads the same
         sod_policies.json that the Python JML engine reads — single source of
         truth for conflict pairs. The intersection logic is duplicated here
         (four lines) so the validation engine has no HTTP or subprocess dependency
         on the Python runtime during FullScan or PostProvision passes.
- 
+
         Block policies produce Critical/blocking findings.
         Warn policies produce High/non-blocking findings.
- 
+
         This function runs in two contexts:
             FullScan    — scans all tenant users, catches existing violations
                           including manual assignments and pre-SoD drift.
             PostProvision — evaluates the specific provisioned identity
                            against actual Entra ID state.
- 
+
     .PARAMETER Rule
         The SOD-EVAL-001 rule object from Rules.json.
- 
+
     .PARAMETER IdentitySnapshot
         Output from Get-IdentitySnapshot (FullScan) or Get-UserSnapshot (PostProvision).
- 
+
     .PARAMETER RulesDocument
         Parsed Rules.json. Not used directly — SoD policies come from sod_policies.json.
         Parameter kept for consistency with the dispatch table signature.
- 
+
     .OUTPUTS
         List[PSCustomObject] — one ComplianceFinding per SoD violation per user.
         Multiple violations per user are all returned — evaluation never stops at first.
- 
+
     .NOTES
-        sod_policies.json path is resolved from the rule's parameters.sodPoliciesPath.
-        The path is relative to $PSScriptRoot — same directory as ValidationEngine.ps1.
-        In Azure Functions deployment, both files live in the function app root.
- 
+        sod_policies.json is located next to the Rules.json that was loaded.
+        The orchestrator sets $Script:RulesDocumentPath (the path to Rules.json),
+        and this function reads the sibling sod_policies.json from the same folder.
+        When that variable is not set (online/dev runs), it falls back to the
+        engine root. This keeps each engagement folder fully self-contained.
+
         Only AnyToAny mode is evaluated. Policies with other mode values are
         skipped with a debug message — consistent with the Python sod_loader
         which rejects unimplemented modes at load time.
@@ -254,28 +256,25 @@ function Evaluate-SoDConflict {
         [Parameter(Mandatory)] [PSCustomObject] $IdentitySnapshot,
         [Parameter()] [PSCustomObject] $RulesDocument = $null
     )
- 
+
     $findings = [System.Collections.Generic.List[PSCustomObject]]::new()
     $p        = $Rule.parameters
- 
-    # Load sod_policies.json 
-    # Path resolved relative to $PSScriptRoot so it works identically in local
-    # development and Azure Functions deployment.
-    # Failure to load is a hard error — SoD evaluation cannot proceed without
-    # the policy catalogue. This surfaces immediately rather than silently
-    # producing no findings when the file is missing or corrupt.
-    
-    # $PSScriptRoot resolves to the Rules/ subfolder where IDRuleProcessor.ps1 lives.
-    # sod_policies.json sits at the function app root alongside Rules.json.
-    $functionAppRoot  = Split-Path $PSScriptRoot -Parent
-    $sodPoliciesPath  = Join-Path $functionAppRoot ($p.sodPoliciesPath ?? 'sod_policies.json')
 
+    # sod_policies.json always lives next to the Rules.json that was loaded.
+    # ValidationEngine.ps1 sets $Script:RulesDocumentPath so it can find it.
+    # Fallback to engine root for callers that didn't pass it (online/dev).
+    if ($Script:RulesDocumentPath) {
+        $sodPoliciesPath = Join-Path (Split-Path $Script:RulesDocumentPath -Parent) 'sod_policies.json'
+    }
+    else {
+        $sodPoliciesPath = Join-Path (Split-Path $PSScriptRoot -Parent) 'sod_policies.json'
+    }
 
     if (-not (Test-Path $sodPoliciesPath)) {
         Write-Warning "Evaluate-SoDConflict: sod_policies.json not found at '$sodPoliciesPath'. SoD evaluation skipped."
         return ,$findings
     }
- 
+
     try {
         $sodDocument = Get-Content $sodPoliciesPath -Raw -Encoding UTF8 | ConvertFrom-Json
     }
@@ -283,31 +282,31 @@ function Evaluate-SoDConflict {
         Write-Warning "Evaluate-SoDConflict: Failed to parse sod_policies.json — $_. SoD evaluation skipped."
         return ,$findings
     }
- 
+
     $sodPolicies = $sodDocument.policies
     if (-not $sodPolicies -or $sodPolicies.Count -eq 0) {
         Write-Debug 'Evaluate-SoDConflict: No policies found in sod_policies.json.'
         return ,$findings
     }
- 
+
     # Severity and weight for warn-level violations — read from rule parameters
     # so they can be tuned in Rules.json without touching this function.
     $warnSeverity = $p.PSObject.Properties['warnSeverity'] ? $p.warnSeverity : 'High'
     $warnWeight   = $p.PSObject.Properties['warnWeight']   ? [int]$p.warnWeight : 70
- 
+
     # Build a display name → group ID map for efficient membership lookups.
     # The SoD policy sets contain GUIDs. The snapshot membership map is keyed
     # by group ID. We need to resolve set_a / set_b GUIDs against the user's
     # memberOf GUIDs directly — no display name lookup needed.
     # The set entries in sod_policies.json are GUIDs, matching the snapshot.
- 
-    # Evaluate each user 
+
+    # Evaluate each user
     foreach ($user in $IdentitySnapshot.Users) {
- 
+
         # Payload scans have no real group memberships — SoD can only evaluate
         # actual tenant state. Skip payload scans entirely.
         if ($IdentitySnapshot.IsPayloadScan) { continue }
- 
+
         $userGroupIds = [System.Collections.Generic.HashSet[string]]::new(
             [System.StringComparer]::OrdinalIgnoreCase
         )
@@ -316,33 +315,33 @@ function Evaluate-SoDConflict {
                 [void]$userGroupIds.Add($gid)
             }
         }
- 
+
         if ($userGroupIds.Count -eq 0) { continue }
- 
-        # Evaluate each SoD policy 
+
+        # Evaluate each SoD policy
         foreach ($policy in $sodPolicies) {
- 
+
             # Only ANY_TO_ANY is implemented. Skip other modes with a debug
             # message — consistent with Python sod_loader behaviour.
             if ($policy.mode -ne 'AnyToAny') {
                 Write-Debug "Evaluate-SoDConflict: Policy '$($policy.id)' uses mode '$($policy.mode)' — not yet implemented. Skipping."
                 continue
             }
- 
+
             # ANY_TO_ANY intersection:
             #   matched_a = groups the user holds that appear in set_a
             #   matched_b = groups the user holds that appear in set_b
             #   Violation = both non-empty
             $matchedA = @($policy.set_a | Where-Object { $userGroupIds.Contains($_) })
             $matchedB = @($policy.set_b | Where-Object { $userGroupIds.Contains($_) })
- 
+
             if ($matchedA.Count -eq 0 -or $matchedB.Count -eq 0) { continue }
- 
+
             # Resolve display names for the finding detail — more readable
             # than raw GUIDs in audit output.
             $conflictingNames = [System.Collections.Generic.List[string]]::new()
             $allConflicting   = @($matchedA) + @($matchedB)
- 
+
             foreach ($gid in $allConflicting) {
                 $displayName = $IdentitySnapshot.Groups |
                     Where-Object { $_.GroupId -eq $gid } |
@@ -354,22 +353,22 @@ function Evaluate-SoDConflict {
                     $conflictingNames.Add($gid)
                 }
             }
- 
+
             $conflictDetail = $conflictingNames -join ', '
- 
+
             # Block policies → Critical/blocking finding
             # Warn policies → High/non-blocking finding
             $isBlock   = $policy.action -eq 'Block'
             $severity  = if ($isBlock) { 'Critical' } else { $warnSeverity }
             $weight    = if ($isBlock) { $Rule.weight } else { $warnWeight }
             $blocking  = $isBlock
- 
+
             $detail = "[$($policy.id)] $($policy.name) — conflicting groups: $conflictDetail"
- 
+
             if ($policy.compensating_control) {
                 $detail += " — Compensating control: $($policy.compensating_control)"
             }
- 
+
             $findings.Add((New-ComplianceFinding `
                 -EntityId   $user.UserId `
                 -EntityType 'User' `
@@ -379,17 +378,17 @@ function Evaluate-SoDConflict {
                 -Weight     $weight `
                 -Blocking   $blocking `
                 -Details    $detail))
- 
+
             Write-Warning "SoD violation detected — user=$($user.UserId), policy=$($policy.id) ($($policy.name)), action=$($policy.action), conflicting=$conflictDetail"
         }
     }
- 
+
     return ,$findings
 }
- 
+
 
 #  PreProvision payload check (before user is created)
-# Check: is this combination of employment type + job title allowed to proceed at all?        
+# Check: is this combination of employment type + job title allowed to proceed at all?
 function Evaluate-PayloadEntitlementPolicy {
     [OutputType([System.Collections.Generic.List[PSCustomObject]])]
     param(
@@ -826,11 +825,15 @@ $Script:IdentityDispatch = @{
 function Invoke-IdentityRuleEngine {
     <#
     .SYNOPSIS
-        Evaluates all Identity/Access/Architecture/Hygiene rules against the identity snapshot.
+        Evaluates all Identity/Access/Architecture/Hygiene/SoD rules against the identity snapshot.
     .PARAMETER RulesDocument
         Parsed Rules.json object (pass the result of ConvertFrom-Json, not the path).
     .PARAMETER IdentitySnapshot
-        Output from Get-IdentitySnapshot.
+        Output from Get-IdentitySnapshot, New-IdentitySnapshotFromCsv, or Get-UserSnapshot.
+    .PARAMETER RulesDocumentPath
+        Optional. Path to the Rules.json file on disk. Used by Evaluate-SoDConflict
+        to find sod_policies.json in the same folder (per-engagement layout).
+        Leave empty for online/dev runs — SoD falls back to the engine root.
     .OUTPUTS
         List[PSCustomObject] — all findings from identity-plane rules
     #>
@@ -838,8 +841,13 @@ function Invoke-IdentityRuleEngine {
     [OutputType([System.Collections.Generic.List[PSCustomObject]])]
     param(
         [Parameter(Mandatory)] [PSCustomObject] $RulesDocument,
-        [Parameter(Mandatory)] [PSCustomObject] $IdentitySnapshot
+        [Parameter(Mandatory)] [PSCustomObject] $IdentitySnapshot,
+        [Parameter()]          [string]         $RulesDocumentPath = ''
     )
+
+    # Stash the rules file location so Evaluate-SoDConflict can resolve
+    # sod_policies.json next to it (engagement folder layout).
+    $Script:RulesDocumentPath = $RulesDocumentPath
 
     $allFindings = [System.Collections.Generic.List[PSCustomObject]]::new()
 

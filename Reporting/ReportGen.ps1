@@ -24,16 +24,13 @@
 
 Set-StrictMode -Version Latest
 
-# ──────────────────────────────────────────────────────────────────────────────
 #  CONSTANTS
-# ──────────────────────────────────────────────────────────────────────────────
 
 $Script:DefaultOutputDir  = Join-Path $PSScriptRoot 'Output'
 $Script:LastRunStateFile  = Join-Path $Script:DefaultOutputDir 'LastRunState.json'
 
-# ──────────────────────────────────────────────────────────────────────────────
+
 #  PRIVATE HELPERS
-# ──────────────────────────────────────────────────────────────────────────────
 
 function Ensure-ReportOutputDirectory {
     param([string] $Path)
@@ -136,9 +133,8 @@ function Format-ReportSeverityBar {
     return "  Blocking: $Blocking  |  NonCompliant: $NonCompliant  |  Compliant: $Compliant"
 }
 
-# ──────────────────────────────────────────────────────────────────────────────
-#  PUBLIC — PreProvision Report
-# ──────────────────────────────────────────────────────────────────────────────
+
+# PreProvision Report is a simplified Pass/Fail output designed for pre-provisioning checks in JML flow. 
 
 function Write-PreProvisionReport {
     <#
@@ -179,9 +175,8 @@ function Write-PreProvisionReport {
     Write-Host ''
 }
 
-# ──────────────────────────────────────────────────────────────────────────────
-#  PUBLIC — FullScan / DriftOnly Report
-# ──────────────────────────────────────────────────────────────────────────────
+
+#  FullScan / DriftOnly Report
 
 function Write-GovernanceReport {
     <#
@@ -203,6 +198,14 @@ function Write-GovernanceReport {
 
     .PARAMETER StoreDriftState
         Switch: save current run state for drift comparison on next run.
+
+    .PARAMETER ScanMode
+        'online' or 'offline'. Recorded in the report header and JSON so the
+        reader knows whether the data came from Graph or from a CSV export.
+
+    .PARAMETER RulesEvaluated
+        Rule IDs present in the Rules.json used for this run — the exact set of
+        rules in scope. In the per-engagement model this is the curated rule set.
     #>
     [CmdletBinding()]
     param(
@@ -213,7 +216,12 @@ function Write-GovernanceReport {
         [Parameter()]          [switch]         $StoreDriftState,
         # EntityId → {UPN, DisplayName, EntityType, IsPrivileged, Tier, Groups, RiskLevel, RiskScore}
         # Built by ValidationEngine.ps1 where identity snapshot and classification results coexist.
-        [Parameter()]          [hashtable]      $EnrichmentMap  = @{}
+        [Parameter()]          [hashtable]      $EnrichmentMap  = @{},
+        # Run metadata for the report header. ScanMode is 'online' or 'offline'.
+        # RulesEvaluated is the rule IDs present in the engagement's Rules.json —
+        # tells an auditor exactly which rules were in scope for this scan.
+        [Parameter()]          [string]         $ScanMode       = 'online',
+        [Parameter()]          [string[]]       $RulesEvaluated = @()
     )
 
     Ensure-ReportOutputDirectory -Path $OutputDir
@@ -223,7 +231,7 @@ function Write-GovernanceReport {
     $summary      = $ClassificationResult.Summary
     $userStates   = $ClassificationResult.EntityRiskStates
 
-    # ── Load Previous State for Drift ────────────────────────────────────────
+    # Load Previous State for Drift Comparison (only for FullScan mode)
     $previousState = Load-ReportLastRunState -StatePath $Script:LastRunStateFile
     $drift         = $null
 
@@ -231,11 +239,12 @@ function Write-GovernanceReport {
         $drift = Calculate-ReportDriftTrend -Current $summary -Previous $previousState
     }
 
-    # ── Console Output ────────────────────────────────────────────────────────
+    # Console Output 
     Write-Host ''
     Write-Host '╔══════════════════════════════════════════════════════════════╗' -ForegroundColor Cyan
     Write-Host "║        GOVERNANCE VALIDATION REPORT  [$mode]" -ForegroundColor Cyan
     Write-Host "║        Run: $runTimestamp UTC" -ForegroundColor Cyan
+    Write-Host "║        Source: $ScanMode  |  Rules in scope: $($RulesEvaluated.Count)" -ForegroundColor Cyan
     Write-Host '╚══════════════════════════════════════════════════════════════╝' -ForegroundColor Cyan
     Write-Host ''
 
@@ -279,7 +288,7 @@ function Write-GovernanceReport {
         Write-Host ''
     }
 
-    # ── Critical/High Users Spotlight ────────────────────────────────────────
+    # Critical/High Users Spotlight: show top 10 riskiest users with details for quick attention.
     $spotlightUsers = @($userStates |
         Where-Object { $_.ComplianceStatus -in @('Blocking', 'NonCompliant') } |
         Sort-Object RiskScore -Descending |
@@ -302,7 +311,7 @@ function Write-GovernanceReport {
     Write-Host '══════════════════════════════════════════════════════════════' -ForegroundColor Cyan
     Write-Host ''
 
-    # ── Export Findings ───────────────────────────────────────────────────────
+    # Export Findings 
     # Flatten all findings from all entity risk states into one list
     $allFindings = [System.Collections.Generic.List[PSCustomObject]]::new()
     foreach ($u in $userStates) {
@@ -373,6 +382,8 @@ function Write-GovernanceReport {
         $payload = [PSCustomObject]@{
             RunTimestamp     = $runTimestamp
             Mode             = $mode
+            ScanMode         = $ScanMode
+            RulesEvaluated   = $RulesEvaluated
             Summary          = $summary
             Drift            = $drift
             EntityRiskStates = $userStates
@@ -387,7 +398,7 @@ function Write-GovernanceReport {
         }
     }
 
-    # ── Store Drift State ─────────────────────────────────────────────────────
+    # Store Drift State 
     if ($StoreDriftState -and $mode -eq 'FullScan') {
         Save-ReportLastRunState -StatePath $Script:LastRunStateFile -Summary $summary -RunTimestamp $runTimestamp
         Write-Host "  [State] Run state saved for next drift comparison." -ForegroundColor Gray
@@ -396,9 +407,8 @@ function Write-GovernanceReport {
     Write-Host ''
 }
 
-# ──────────────────────────────────────────────────────────────────────────────
-#  PUBLIC — Get-GovernanceMetrics  (programmatic access, no console output)
-# ──────────────────────────────────────────────────────────────────────────────
+
+#  Get-GovernanceMetrics  (programmatic access, no console output).
 
 function Get-GovernanceMetrics {
     <#

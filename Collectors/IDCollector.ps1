@@ -20,10 +20,9 @@
 
 Set-StrictMode -Version Latest
 
-# ---------------------------------------------------------------------------
+
 # Writes non-fatal Graph errors to CSV if a log path is provided.
 # If no log path is set, errors are silently ignored.
-# ---------------------------------------------------------------------------
 
 function Write-IdentityCollectionError {
     param([string]$Source, [string]$Detail, [string]$LogPath)
@@ -37,18 +36,17 @@ function Write-IdentityCollectionError {
     } | Export-Csv -LiteralPath $LogPath -Append -NoTypeInformation -Encoding UTF8
 }
 
-# ---------------------------------------------------------------------------
+
 # Retrieves all users with only the fields needed by the engine.
 # Avoids pulling unnecessary properties hence reducing API payload.
-# ---------------------------------------------------------------------------
 
 function Get-IdentityUsers {
     [OutputType([System.Collections.Generic.List[PSCustomObject]])]
     param()
 
-    # ---------------------------------------------------------------------------
+   
     # Base properties — available on all Entra license tiers
-    # ---------------------------------------------------------------------------
+  
     $properties = @(
         'id','displayName','userPrincipalName','accountEnabled',
         'jobTitle','department','employeeType','employeeId',
@@ -57,12 +55,12 @@ function Get-IdentityUsers {
         'assignedLicenses','mail','userType','externalUserState'
     )
 
-    # ---------------------------------------------------------------------------
+   
     # Capability detection — signInActivity requires Entra ID P1 or P2.
     # We probe for it with a single-user call before committing to the full scan.
     # If the probe succeeds, we include it for all users.
     # If it fails (403), we proceed without it and LastSignInDateTime stays null.
-    # ---------------------------------------------------------------------------
+  
     $includeSignIn = $false
 
     try {
@@ -81,7 +79,7 @@ function Get-IdentityUsers {
     $users = [System.Collections.Generic.List[PSCustomObject]]::new()
 
     try {
-        # ---------------------------------------------------------------------------
+  
         # NOTE — Entra ID P1 or P2 license required for advanced query parameters:
         # -ConsistencyLevel eventual and -CountVariable enable server-side filtering
         # and accurate counts but require a premium license.
@@ -91,7 +89,7 @@ function Get-IdentityUsers {
         #
         # STANDARD (works on all license tiers):
         $page = Get-MgUser -All -Property ($properties -join ',')
-        # ---------------------------------------------------------------------------
+      
 
         foreach ($user in $page) {
 
@@ -130,12 +128,12 @@ function Get-IdentityUsers {
     return $users
 }
 
-# ---------------------------------------------------------------------------
+
 # Retrieves all groups and marks which ones are considered privileged.
 # A group is privileged if:
 #   - It is role-assignable, OR
 #   - Its name matches configured privilege patterns.
-# ---------------------------------------------------------------------------
+
 
 function Get-IdentityGroups {
     [OutputType([System.Collections.Generic.List[PSCustomObject]])]
@@ -189,10 +187,9 @@ function Get-IdentityGroups {
     return $groups
 }
 
-# ---------------------------------------------------------------------------
+
 # Builds a lookup table of UserId -> list of GroupIds.
 # Errors for individual groups are logged but do not stop the process.
-# ---------------------------------------------------------------------------
 
 function Get-IdentityMemberships {
     [OutputType([hashtable])]
@@ -227,10 +224,9 @@ function Get-IdentityMemberships {
     return $map
 }
 
-# ---------------------------------------------------------------------------
+
 # Converts raw HR / directory fields into simplified employment states.
 # Rules rely on this normalized value, not raw attributes.
-# ---------------------------------------------------------------------------
 
 function Resolve-EmploymentStatus {
     [OutputType([string])]
@@ -283,9 +279,8 @@ function Resolve-MfaState {
     }
 }
 
-# ---------------------------------------------------------------------------
+
 # Marks users as privileged if they belong to any privileged group.
-# ---------------------------------------------------------------------------
 
 function Set-UserPrivilegeFlag {
     param(
@@ -314,11 +309,10 @@ function Set-UserPrivilegeFlag {
     }
 }
 
-# ---------------------------------------------------------------------------
+
 # Public entry point.
 # Builds and returns a full identity snapshot for the engine.
 # Supports optional single-user mode (PreProvision).
-# ---------------------------------------------------------------------------
 
 function Get-IdentitySnapshot {
 
@@ -383,11 +377,11 @@ function Get-IdentitySnapshot {
     }
 }
 
-# ---------------------------------------------------------------------------
+
 # New-IdentitySnapshotFromPayload
-# Builds a synthetic identity snapshot from a JML canonical identity object.
+# Builds a synthetic identity snapshot from the JML canonical identity object.
 # Used by the validation engine PreProvision path when the user does not yet
-# exist in Entra ID — no Graph calls are made.
+# exist in Entra ID, no Graph calls are made.
 #
 # Purpose:      Allow the validation engine to run PreProvision rules against
 #               a JML payload before any Entra ID object is created.
@@ -398,7 +392,7 @@ function Get-IdentitySnapshot {
 # Security:     UPN duplicate check must still be performed separately by the
 #               JML engine via Graph before provisioning executes. This function
 #               does not query Entra ID and cannot detect conflicts.
-# ---------------------------------------------------------------------------
+
 
 function New-IdentitySnapshotFromPayload {
     [CmdletBinding()]
@@ -454,6 +448,146 @@ function New-IdentitySnapshotFromPayload {
         MembershipMap = [hashtable]::new([System.StringComparer]::OrdinalIgnoreCase)
         CollectedAt   = [datetime]::UtcNow
         IsPayloadScan = $true
+    }
+}
+
+function New-IdentitySnapshotFromCsv {
+    <#
+    .SYNOPSIS
+        Builds an identity snapshot from three CSV files exported from Entra ID.
+
+    .DESCRIPTION
+        Offline collection path for consulting engagements where deploying an
+        app registration into the customer tenant is not desirable. Produces the
+        same snapshot shape as Get-IdentitySnapshot but sources data from CSV exports rather than Graph calls.
+
+        Fields that cannot be sourced from a portal export (LastSignInDateTime,
+        MFA registration, PIM schedules) are set to null. The orchestrator
+        skips rules that depend on these fields when running in offline mode.
+
+    .PARAMETER UsersPath
+        Path to users.csv. Required columns: UserId, UserPrincipalName,
+        DisplayName, AccountEnabled, JobTitle, Department, EmployeeType,
+        EmployeeId, CreatedDateTime, UserType.
+
+    .PARAMETER GroupsPath
+        Path to groups.csv. Required columns: GroupId, DisplayName,
+        IsAssignableToRole, Description.
+
+    .PARAMETER MembersPath
+        Path to group_members.csv. Required columns: GroupId, UserId.
+
+    .OUTPUTS
+        PSCustomObject — identical shape to Get-IdentitySnapshot. IsPayloadScan
+        is false. CollectedAt reflects when the CSV was loaded.
+
+    .NOTES
+        No Graph calls. Fully offline.
+    #>
+    [CmdletBinding()]
+    [OutputType([PSCustomObject])]
+    param(
+        [Parameter(Mandatory)] [string]   $UsersPath,
+        [Parameter(Mandatory)] [string]   $GroupsPath,
+        [Parameter(Mandatory)] [string]   $MembersPath,
+        [Parameter()]          [string[]] $PrivilegedGroupPatterns = @('Admin','Tier0','Tier1','Privileged','Manager'),
+        [Parameter()]          [string[]] $PrivilegedGroupNames    = @()
+    )
+
+    foreach ($p in @($UsersPath, $GroupsPath, $MembersPath)) {
+        if (-not (Test-Path $p)) {
+            throw "New-IdentitySnapshotFromCsv: input file not found — $p"
+        }
+    }
+
+    $usersCsv   = Import-Csv -LiteralPath $UsersPath
+    $groupsCsv  = Import-Csv -LiteralPath $GroupsPath
+    $membersCsv = Import-Csv -LiteralPath $MembersPath
+
+    # Users
+    # Build user objects matching the shape Get-IdentityUsers produces. Fields
+    # not available from CSV are explicitly null so rules that depend on them
+    # fail safely (no false positives) rather than throwing.
+    $users = [System.Collections.Generic.List[PSCustomObject]]::new()
+    foreach ($row in $usersCsv) {
+
+        $created = $null
+        if (-not [string]::IsNullOrWhiteSpace($row.CreatedDateTime)) {
+            try { $created = [datetime]$row.CreatedDateTime } catch { $created = $null }
+        }
+
+        $users.Add([PSCustomObject]@{
+            UserId                     = $row.UserId
+            DisplayName                = ($row.DisplayName ?? '').Trim()
+            UserPrincipalName          = $row.UserPrincipalName
+            AccountEnabled             = ($row.AccountEnabled -eq 'true' -or $row.AccountEnabled -eq 'True' -or $row.AccountEnabled -eq '1')
+            JobTitle                   = $row.JobTitle
+            Department                 = $row.Department
+            EmployeeType               = $row.EmployeeType
+            EmployeeId                 = $row.EmployeeId
+            CreatedDateTime            = $created
+            LastPasswordChangeDateTime = $null   # not in offline export
+            LastSignInDateTime         = $null   # not in offline export
+            OnPremisesSynced           = $false  # not in offline export
+            UserType                   = if ($row.UserType) { $row.UserType } else { 'Member' }
+            ExternalUserState          = $null
+            AssignedLicenses           = @()
+            MfaRegistered              = $null   # not in offline export
+            EmploymentStatus           = $null   # set below
+            IsPrivileged               = $false  # set below
+        })
+    }
+
+    # Groups
+    # Same privilege classification logic as Get-IdentityGroups:
+    # role-assignable OR exact name match in entitlement model OR pattern match.
+    $groups = [System.Collections.Generic.List[PSCustomObject]]::new()
+    foreach ($row in $groupsCsv) {
+
+        $isAssignable = ($row.IsAssignableToRole -eq 'true' -or $row.IsAssignableToRole -eq 'True' -or $row.IsAssignableToRole -eq '1')
+
+        $exactMatch   = $PrivilegedGroupNames.Count -gt 0 -and ($PrivilegedGroupNames -contains $row.DisplayName)
+        $patternMatch = $PrivilegedGroupPatterns.Count -gt 0 -and (
+            $PrivilegedGroupPatterns | Where-Object { $row.DisplayName -match $_ }
+        )
+        $isPrivileged = $isAssignable -or $exactMatch -or $patternMatch
+
+        $groups.Add([PSCustomObject]@{
+            GroupId            = $row.GroupId
+            DisplayName        = ($row.DisplayName ?? '').Trim()
+            Description        = $row.Description
+            SecurityEnabled    = $true   # not in offline export — assume true
+            MailEnabled        = $false  # not in offline export
+            IsAssignableToRole = $isAssignable
+            IsDynamic          = $false  # not in offline export
+            OnPremisesSynced   = $false  # not in offline export
+            IsPrivileged       = [bool]$isPrivileged
+        })
+    }
+
+    # Membership map
+    # Build a lookup of UserId -> list of GroupIds from the group_members.csv. Log and skip any rows with missing fields rather than throwing.
+    $membershipMap = [hashtable]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($row in $membersCsv) {
+        if (-not $row.UserId -or -not $row.GroupId) { continue }
+        if (-not $membershipMap.ContainsKey($row.UserId)) {
+            $membershipMap[$row.UserId] = [System.Collections.Generic.List[string]]::new()
+        }
+        $membershipMap[$row.UserId].Add($row.GroupId)
+    }
+
+    # Derive computed fields the same way the online path does
+    foreach ($user in $users) {
+        $user.EmploymentStatus = Resolve-EmploymentStatus -User $user
+    }
+    Set-UserPrivilegeFlag -Users $users -Groups $groups -MembershipMap $membershipMap
+
+    return [PSCustomObject]@{
+        Users         = $users
+        Groups        = $groups
+        MembershipMap = $membershipMap
+        CollectedAt   = [datetime]::UtcNow
+        IsPayloadScan = $false
     }
 }
 

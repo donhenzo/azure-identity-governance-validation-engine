@@ -4,7 +4,7 @@
 
 .DESCRIPTION
     Execution order:
-        1. IdentityCollector  → identity snapshot (Graph)
+        1. IdentityCollector  → identity snapshot (Graph or CSV)
         2. RbacCollector      → RBAC snapshot (Azure, all subscriptions)
         3. IdentityRuleProcessor   → Identity / Access / Architecture / Hygiene findings
         4. RbacRuleProcessor       → RBAC findings
@@ -21,6 +21,16 @@
 
 .PARAMETER RulesPath
     Path to Rules.json. Defaults to .\Rules.json
+    In offline mode this points at the engagement's Rules.json; sod_policies.json
+    is read from the same folder.
+
+.PARAMETER InputMode
+    online  — collect identity data from Microsoft Graph (default)
+    offline — build the snapshot from three engagement CSVs, no Graph calls.
+              Identity plane only — CSV carries no RBAC or correlation data.
+
+.PARAMETER UsersPath / GroupsPath / MembersPath
+    Required in offline mode. The three CSVs exported from the customer tenant.
 
 .PARAMETER TargetUserId
     Required for PreProvision. Azure AD Object ID of the user being evaluated.
@@ -49,6 +59,7 @@
 .EXAMPLE
     .\ValidationEngine.ps1 -Mode PreProvision -TargetUserId 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
     .\ValidationEngine.ps1 -Mode FullScan -ExportCsv -ExportJson -StoreDriftState -ResolveMfa
+    .\ValidationEngine.ps1 -Mode FullScan -InputMode offline -UsersPath .\Engagements\Acme\input\users.csv -GroupsPath .\Engagements\Acme\input\groups.csv -MembersPath .\Engagements\Acme\input\group_members.csv -RulesPath .\Engagements\Acme\Rules.json -OutputDir .\Engagements\Acme\reports -ExportJson -ExportCsv
     .\ValidationEngine.ps1 -Mode DriftOnly -ExportJson
 #>
 
@@ -59,6 +70,12 @@ param(
     [string] $Mode,
 
     [Parameter()] [string]   $RulesPath          = (Join-Path $PSScriptRoot 'Rules.json'),
+
+    [Parameter()] [ValidateSet('online','offline')] [string] $InputMode = 'online',
+    [Parameter()] [string]   $UsersPath           = '',
+    [Parameter()] [string]   $GroupsPath          = '',
+    [Parameter()] [string]   $MembersPath         = '',
+
     [Parameter()] [string]   $TargetUserId        = '',
     [Parameter()] [string]   $TargetDisplayName   = '',
     [Parameter()] [string]   $IdentityPayload     = '',
@@ -102,7 +119,27 @@ if (-not (Test-Path -LiteralPath $RulesPath)) {
     throw "ValidationEngine: Rules file not found at '$RulesPath'."
 }
 
-Write-Verbose "ValidationEngine: [$Mode] starting at $(Get-Date -Format 'o')"
+# Offline mode runs the identity plane only — CSV carries no RBAC or correlation data.
+$identityPlaneOnly = ($InputMode -eq 'offline')
+
+if ($InputMode -eq 'offline') {
+    if ($Mode -ne 'FullScan') {
+        throw 'ValidationEngine: offline mode supports -Mode FullScan only.'
+    }
+    foreach ($pair in @(
+        @{ Name = 'UsersPath';   Value = $UsersPath },
+        @{ Name = 'GroupsPath';  Value = $GroupsPath },
+        @{ Name = 'MembersPath'; Value = $MembersPath })) {
+        if ([string]::IsNullOrWhiteSpace($pair.Value)) {
+            throw "ValidationEngine: offline mode requires -$($pair.Name)."
+        }
+        if (-not (Test-Path -LiteralPath $pair.Value)) {
+            throw "ValidationEngine: offline input not found — $($pair.Value)"
+        }
+    }
+}
+
+Write-Verbose "ValidationEngine: [$Mode / $InputMode] starting at $(Get-Date -Format 'o')"
 
 
 # Load rules once — shared across all processors
@@ -138,6 +175,9 @@ if ($rulesDocument.entitlementModel -and $rulesDocument.entitlementModel.groups)
 
 # Route to the correct collector based on mode and parameters.
 #
+#   offline                         → New-IdentitySnapshotFromCsv: full snapshot
+#                                     built from three CSVs, zero Graph calls
+#
 #   PreProvision + IdentityPayload  → synthetic snapshot, zero Graph calls
 #                                     user does not exist in Entra yet
 #
@@ -148,7 +188,18 @@ if ($rulesDocument.entitlementModel -and $rulesDocument.entitlementModel.groups)
 #   FullScan / DriftOnly            → Get-IdentitySnapshot: full tenant scan
 #                                     fetches all users, groups, memberships
 
-if ($Mode -eq 'PreProvision' -and -not [string]::IsNullOrWhiteSpace($IdentityPayload)) {
+if ($InputMode -eq 'offline') {
+
+    # CSV path — build the full-tenant snapshot from the three engagement CSVs.
+    # Same snapshot shape as Get-IdentitySnapshot, so every downstream rule is unchanged.
+    $identitySnapshot = New-IdentitySnapshotFromCsv `
+        -UsersPath               $UsersPath `
+        -GroupsPath              $GroupsPath `
+        -MembersPath             $MembersPath `
+        -PrivilegedGroupPatterns @([string[]]$rulesDocument.entitlementModel._privilegedTiers + @('Admin', 'Tier0', 'Tier1')) `
+        -PrivilegedGroupNames    $privilegedGroupNames.ToArray()
+
+} elseif ($Mode -eq 'PreProvision' -and -not [string]::IsNullOrWhiteSpace($IdentityPayload)) {
 
     # Payload path, user does not exist yet, build synthetic snapshot
     $payloadObject    = $IdentityPayload | ConvertFrom-Json
@@ -211,17 +262,18 @@ if ($identitySnapshot.Users.Count -eq 0) {
 Write-Verbose "ValidationEngine: $($identitySnapshot.Users.Count) users, $($identitySnapshot.Groups.Count) groups collected."
 
 
-# STEP 2 — RBAC collection (skip for PreProvision — no subscription scan needed)
+# STEP 2 — RBAC collection (skip for PreProvision and offline — no subscription scan)
 
 $rbacSnapshot = $null
 
-if ($Mode -ne 'PreProvision') {
+if ($Mode -ne 'PreProvision' -and -not $identityPlaneOnly) {
     Write-Verbose 'ValidationEngine: [2/5] Collecting RBAC data across all subscriptions...'
     $rbacSnapshot = Get-RbacSnapshot -ErrorLogPath $ErrorLogPath -SubscriptionFilter $SubscriptionFilter
     Write-Verbose "ValidationEngine: $($rbacSnapshot.RoleAssignments.Count) role assignments across $($rbacSnapshot.SubscriptionsEnumerated.Count) subscription(s)."
 }
 else {
-    # Empty stub so downstream code doesn't null-check everywhere
+    # Empty stub so downstream code doesn't null-check everywhere.
+    # Also covers offline mode — CSV has no RBAC data, so enrichment iterates an empty list.
     $rbacSnapshot = [PSCustomObject]@{
         RoleAssignments         = [System.Collections.Generic.List[PSCustomObject]]::new()
         SubscriptionsEnumerated = [System.Collections.Generic.List[PSCustomObject]]::new()
@@ -241,13 +293,17 @@ $allFindings = [System.Collections.Generic.List[PSCustomObject]]::new()
 # Explicitly type all findings variables — an empty List[PSCustomObject] returned from
 # a function gets unwrapped to $null by PowerShell when assigned to an untyped variable.
 # Typing the left-hand side forces PowerShell to keep the empty List intact.
+#
+# RulesDocumentPath is passed so Evaluate-SoDConflict can find sod_policies.json
+# next to the Rules.json that was loaded (engagement folder in offline mode,
+# engine root in online mode).
 [System.Collections.Generic.List[PSCustomObject]] $identityFindings =
-    Invoke-IdentityRuleEngine -RulesDocument $rulesDocument -IdentitySnapshot $identitySnapshot
+    Invoke-IdentityRuleEngine -RulesDocument $rulesDocument -IdentitySnapshot $identitySnapshot -RulesDocumentPath $RulesPath
 foreach ($f in $identityFindings) { $allFindings.Add($f) }
 Write-Verbose "ValidationEngine: Identity processor → $($identityFindings.Count) finding(s)"
 
-# RBAC plane (skip for PreProvision)
-if ($Mode -ne 'PreProvision') {
+# RBAC plane (skip for PreProvision and offline — no RBAC data without Graph/ARM)
+if ($Mode -ne 'PreProvision' -and -not $identityPlaneOnly) {
     [System.Collections.Generic.List[PSCustomObject]] $rbacFindings =
         Invoke-RbacRuleEngine -RulesDocument $rulesDocument -RbacSnapshot $rbacSnapshot
     foreach ($f in $rbacFindings) { $allFindings.Add($f) }
@@ -429,13 +485,20 @@ if ($Mode -eq 'PreProvision') {
     Write-PreProvisionReport -ClassificationResult $classificationResult -TargetDisplayName $TargetDisplayName
 }
 else {
+    # Rule IDs actually in scope for this scan — comes straight from the loaded Rules.json.
+    # In the per-engagement model this is the curated rule set, so the report header
+    # tells an auditor exactly which rules were evaluated.
+    $rulesEvaluated = @($rulesDocument.rules | Select-Object -ExpandProperty id)
+
     Write-GovernanceReport `
         -ClassificationResult $classificationResult `
         -OutputDir            $OutputDir `
         -ExportCsv:$ExportCsv `
         -ExportJson:$ExportJson `
         -StoreDriftState:$StoreDriftState `
-        -EnrichmentMap        $enrichmentMap
+        -EnrichmentMap        $enrichmentMap `
+        -ScanMode             $InputMode `
+        -RulesEvaluated       $rulesEvaluated
 }
 
 Write-Verbose 'ValidationEngine: Run complete.'
