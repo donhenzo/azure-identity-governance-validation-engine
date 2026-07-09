@@ -41,14 +41,13 @@ function Resolve-RbacEntityType {
     }
 }
 
-# ---------------------------------------------------------------------------
+
 # Evaluate-RbacAssignments
 # Checks RBAC assignments for three things:
 #   1. Users assigned roles directly instead of via groups (RBAC-001)
 #   2. Privileged roles assigned at a broad forbidden scope (RBAC-002)
 #   3. Forbidden roles assigned to any principal type (RBAC-003)
 # Resolves EntityType dynamically per assignment.
-# ---------------------------------------------------------------------------
 
 function Evaluate-RbacAssignments {
     [OutputType([System.Collections.Generic.List[PSCustomObject]])]
@@ -65,9 +64,9 @@ function Evaluate-RbacAssignments {
         $entityType   = Resolve-RbacEntityType -PrincipalType $assignment.PrincipalType
         $isDirectUser = $assignment.PrincipalType -eq 'User'
 
-        # -------------------------------------------------------------------
+      
         # RBAC-001: Direct role assignment to users (roles must be group-based)
-        # -------------------------------------------------------------------
+    
         if ($p.PSObject.Properties['allowedAssignmentTypes']) {
             if ($isDirectUser -and $p.allowedAssignmentTypes -notcontains $assignment.AssignmentType) {
                 $findings.Add((New-ComplianceFinding `
@@ -83,10 +82,10 @@ function Evaluate-RbacAssignments {
             continue
         }
 
-        # -------------------------------------------------------------------
+       
         # RBAC-002: Privileged role at a forbidden broad scope
         # Applies to User, Group, and ServicePrincipal
-        # -------------------------------------------------------------------
+      
         if ($p.PSObject.Properties['forbiddenScopes'] -and $p.PSObject.Properties['privilegedRoles']) {
             $isPrivRole = $p.privilegedRoles -contains $assignment.RoleDefinitionName
             # ScopeType was normalized by the collector to: Subscription | ResourceGroup | Resource | ManagementGroup.
@@ -110,10 +109,10 @@ function Evaluate-RbacAssignments {
             continue
         }
 
-        # -------------------------------------------------------------------
+       
         # RBAC-003: Forbidden roles regardless of principal type
         # Flags Owner and User Access Administrator without PIM
-        # -------------------------------------------------------------------
+        
         if ($p.PSObject.Properties['forbiddenRoles']) {
             if ($p.forbiddenRoles -contains $assignment.RoleDefinitionName) {
                 $findings.Add((New-ComplianceFinding `
@@ -133,20 +132,20 @@ function Evaluate-RbacAssignments {
     return $findings
 }
 
-# ---------------------------------------------------------------------------
+
 # Dispatch table
 # Maps rule.type in Rules.json to evaluation functions.
 # Allows additional rule engines to be added without changing orchestration logic.
-# ---------------------------------------------------------------------------
+
 
 $Script:RbacDispatch = @{
     'Evaluate-DirectRoleAssignments' = { param($r, $snap, $doc) Evaluate-RbacAssignments -Rule $r -RbacSnapshot $snap }
 }
 
-# ---------------------------------------------------------------------------
+
 # Invoke-RbacRuleEngine
 # Processes every RBAC rule in Rules.json and returns all findings.
-# ---------------------------------------------------------------------------
+
 
 function Invoke-RbacRuleEngine {
     <#
@@ -244,7 +243,7 @@ function Invoke-RbacRuleEngine {
     }
 
 
-    # ── Shared suppression pass ───────────────────────────────────────────────
+    # Shared suppression pass 
     # Catches any remaining suppressesOnMatch relationships not handled by the
     # scope-aware RBAC-specific pass above.
     $allFindings = Invoke-SuppressionPass -Findings $allFindings -RulesDocument $RulesDocument

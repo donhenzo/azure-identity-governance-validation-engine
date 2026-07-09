@@ -20,10 +20,9 @@
 
 Set-StrictMode -Version Latest
 
-# ---------------------------------------------------------------------------
+
 # Logs non-fatal errors to CSV (if a log path is provided).
 # If no path is provided, errors are ignored.
-# ---------------------------------------------------------------------------
 
 function Write-RbacCollectionError {
     param([string]$Source, [string]$Detail, [string]$LogPath)
@@ -37,13 +36,12 @@ function Write-RbacCollectionError {
     } | Export-Csv -LiteralPath $LogPath -Append -NoTypeInformation -Encoding UTF8
 }
 
-# ---------------------------------------------------------------------------
+
 # Figures out what level a role assignment applies to.
 #   Subscription level
 #   Resource Group level
 #   Individual resource level
 #   Management Group level
-# ---------------------------------------------------------------------------
 
 function Resolve-RbacScopeType {
     [OutputType([string])]
@@ -72,9 +70,8 @@ function Resolve-RbacScopeType {
     return 'Unknown'
 }
 
-# ---------------------------------------------------------------------------
+
 # Extracts the subscription ID from a scope string.
-# ---------------------------------------------------------------------------
 
 function Resolve-RbacSubscriptionId {
     [OutputType([string])]
@@ -87,11 +84,9 @@ function Resolve-RbacSubscriptionId {
     return ''
 }
 
-# ---------------------------------------------------------------------------
+
 # Gets all role assignments inside ONE subscription.
 # Converts raw Az output into a clean, consistent format.
-# ---------------------------------------------------------------------------
-
 function Get-SubscriptionRoleAssignments {
     [OutputType([System.Collections.Generic.List[PSCustomObject]])]
     param(
@@ -139,10 +134,9 @@ function Get-SubscriptionRoleAssignments {
     return $results
 }
 
-# ---------------------------------------------------------------------------
+
 # MAIN FUNCTION
 # Collects RBAC across ALL accessible subscriptions.
-# ---------------------------------------------------------------------------
 
 function Get-RbacSnapshot {
     [CmdletBinding()]

@@ -418,14 +418,15 @@ foreach ($user in $identitySnapshot.Users) {
     $rs = if ($riskStateById.ContainsKey($user.UserId)) { $riskStateById[$user.UserId] } else { $null }
 
     $enrichmentMap[$user.UserId] = [PSCustomObject]@{
-        UPN              = $user.UserPrincipalName
-        DisplayName      = $user.DisplayName
-        EntityType       = 'User'
-        EmployeeType     = if ($user.EmployeeType)     { $user.EmployeeType     } else { '' }
-        EmploymentStatus = if ($user.EmploymentStatus) { $user.EmploymentStatus } else { '' }
-        IsPrivileged     = $user.IsPrivileged
-        Tier             = $highestTier
-        Groups           = ($memberGroupNames -join ' | ')
+        UPN               = $user.UserPrincipalName
+        DisplayName       = $user.DisplayName
+        EntityType        = 'User'
+        OnPremisesSynced  = $user.OnPremisesSynced
+        EmployeeType      = if ($user.EmployeeType)     { $user.EmployeeType     } else { '' }
+        EmploymentStatus  = if ($user.EmploymentStatus) { $user.EmploymentStatus } else { '' }
+        IsPrivileged      = $user.IsPrivileged
+        Tier              = $highestTier
+        Groups            = ($memberGroupNames -join ' | ')
         ComplianceStatus  = if ($rs) { $rs.ComplianceStatus  } else { 'Compliant' }
         RiskLevel         = if ($rs) { $rs.RiskLevel         } else { 'None'      }
         RiskScore         = if ($rs) { $rs.RiskScore         } else { 0           }
@@ -436,9 +437,40 @@ foreach ($user in $identitySnapshot.Users) {
     }
 }
 
+# Enrichment for groups — required so on-premises-synced privileged groups
+# (ARCH-004) and orphaned groups (HYG-006) resolve DisplayName/OnPremisesSynced
+# correctly instead of falling through to the RBAC GUID fallback below.
+foreach ($group in $identitySnapshot.Groups) {
+    if (-not $enrichmentMap.ContainsKey($group.GroupId)) {
+        $rs = if ($riskStateById.ContainsKey($group.GroupId)) { $riskStateById[$group.GroupId] } else { $null }
+        $enrichmentMap[$group.GroupId] = [PSCustomObject]@{
+            UPN               = $group.DisplayName
+            DisplayName       = $group.DisplayName
+            EntityType        = 'Group'
+            OnPremisesSynced  = $group.OnPremisesSynced
+            EmployeeType      = ''
+            EmploymentStatus  = ''
+            IsPrivileged      = $group.IsPrivileged
+            Tier              = 'N/A'
+            Groups            = ''
+            ComplianceStatus  = if ($rs) { $rs.ComplianceStatus  } else { 'Compliant' }
+            RiskLevel         = if ($rs) { $rs.RiskLevel         } else { 'None'      }
+            RiskScore         = if ($rs) { $rs.RiskScore         } else { 0           }
+            RiskScoreRaw      = if ($rs) { $rs.RiskScoreRaw      } else { 0           }
+            RiskDensity       = if ($rs) { $rs.RiskDensity       } else { 0           }
+            HygieneIssueCount = if ($rs) { $rs.HygieneIssueCount } else { 0           }
+            RecommendedAction = if ($rs) { $rs.RecommendedAction } else { 'None'      }
+        }
+    }
+}
+
+
 # ServicePrincipal / Group entities from RBAC findings.
 # RBAC assignments carry PrincipalName (DisplayName from ARM) — use it for readability
 # instead of falling back to the raw EntityId (ObjectId GUID) in the CSV.
+# OnPremisesSynced is always $false here — these are ARM-plane principals
+# (service principals, or RBAC-scoped groups never touched by the identity
+# collector), so on-premises sync status has no meaning for them.
 $rbacPrincipalNames = [hashtable]::new([System.StringComparer]::OrdinalIgnoreCase)
 foreach ($ra in $rbacSnapshot.RoleAssignments) {
     if (-not $rbacPrincipalNames.ContainsKey($ra.PrincipalId) -and
@@ -459,6 +491,7 @@ foreach ($rs in $classificationResult.EntityRiskStates) {
             UPN               = $principalName   # SPs/Groups have no UPN — display name is most readable
             DisplayName       = $principalName
             EntityType        = $rs.EntityType
+            OnPremisesSynced  = $false
             EmployeeType      = ''               # not applicable for non-user entities
             EmploymentStatus  = ''
             IsPrivileged      = $false

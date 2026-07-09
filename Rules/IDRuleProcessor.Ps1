@@ -473,6 +473,165 @@ function Evaluate-PimEligibility {
 
     return ,$findings
 }
+function Evaluate-OrphanedUsers {
+    <#
+    .SYNOPSIS
+        Flags user accounts that hold no group memberships at all.
+
+    .DESCRIPTION
+        An account with zero group memberships has either never been properly
+        provisioned, was stripped of access without being disabled/deleted, or
+        is a residual object after an incomplete Leaver process. All three cases
+        warrant review.
+
+        Skipped on payload scans — synthetic pre-provision users have no
+        real memberships by definition. Runs on all other modes including
+        offline CSV scans and disabled accounts.
+
+    .NOTES
+        Distinct from HYG-001/002 (stale sign-in) — an account can be active
+        and signing in regularly but still hold no group memberships.
+    #>
+    [OutputType([System.Collections.Generic.List[PSCustomObject]])]
+    param(
+        [Parameter(Mandatory)] [PSCustomObject] $Rule,
+        [Parameter(Mandatory)] [PSCustomObject] $IdentitySnapshot,
+        [Parameter()] [PSCustomObject] $RulesDocument = $null
+    )
+
+    $findings = [System.Collections.Generic.List[PSCustomObject]]::new()
+
+    # Payload scans are synthetic — no real memberships exist yet by design.
+    if ($IdentitySnapshot.IsPayloadScan) { return ,$findings }
+
+    foreach ($user in $IdentitySnapshot.Users) {
+
+        $hasGroups = $IdentitySnapshot.MembershipMap.ContainsKey($user.UserId) -and
+                     $IdentitySnapshot.MembershipMap[$user.UserId].Count -gt 0
+
+        if (-not $hasGroups) {
+            $accountState = if ($user.AccountEnabled) { 'Enabled' } else { 'Disabled' }
+            $findings.Add((New-ComplianceFinding `
+                -EntityId   $user.UserId `
+                -EntityType 'User' `
+                -RuleId     $Rule.id `
+                -Category   $Rule.category `
+                -Severity   $Rule.severity `
+                -Weight     $Rule.weight `
+                -Blocking   $Rule.blocking `
+                -Details    "Account '$($user.UserPrincipalName)' ($accountState) holds no group memberships. Verify provisioning is complete or initiate cleanup."))
+        }
+    }
+
+    return ,$findings
+}
+
+
+function Evaluate-OrphanedGroups {
+    <#
+    .SYNOPSIS
+        Flags groups that have no members.
+
+    .DESCRIPTION
+        A group with zero members is either newly created and not yet populated,
+        was emptied after a Leaver process without being deleted, or represents
+        an access path that is no longer in use. All cases warrant review by
+        the tenant owner — an empty group is never expected to remain long-term.
+
+        No skips — runs on all modes including offline CSV scans.
+        The MembershipMap is keyed by UserId and values are lists of GroupIds.
+        A group is orphaned if its GroupId never appears as a value anywhere
+        in the map. A reverse index is built once per call for efficiency.
+    #>
+    [OutputType([System.Collections.Generic.List[PSCustomObject]])]
+    param(
+        [Parameter(Mandatory)] [PSCustomObject] $Rule,
+        [Parameter(Mandatory)] [PSCustomObject] $IdentitySnapshot,
+        [Parameter()] [PSCustomObject] $RulesDocument = $null
+    )
+
+    $findings = [System.Collections.Generic.List[PSCustomObject]]::new()
+
+    # Build a set of all GroupIds that appear in at least one membership list.
+    # One pass over the map — O(total memberships), not O(groups x users).
+    $groupsWithMembers = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::OrdinalIgnoreCase
+    )
+    foreach ($memberList in $IdentitySnapshot.MembershipMap.Values) {
+        foreach ($gid in $memberList) {
+            [void]$groupsWithMembers.Add($gid)
+        }
+    }
+
+    foreach ($group in $IdentitySnapshot.Groups) {
+        if (-not $groupsWithMembers.Contains($group.GroupId)) {
+            $privilegeLabel = if ($group.IsPrivileged) { 'Privileged' } else { 'Standard' }
+            $findings.Add((New-ComplianceFinding `
+                -EntityId   $group.GroupId `
+                -EntityType 'Group' `
+                -RuleId     $Rule.id `
+                -Category   $Rule.category `
+                -Severity   $Rule.severity `
+                -Weight     $Rule.weight `
+                -Blocking   $Rule.blocking `
+                -Details    "Group '$($group.DisplayName)' ($privilegeLabel) has no members. Review whether the group is still needed or should be removed."))
+        }
+    }
+
+    return ,$findings
+}
+
+function Evaluate-HybridGroupGovernance {
+    <#
+    .SYNOPSIS
+        Flags privileged groups whose membership is managed by on-premises AD.
+
+    .DESCRIPTION
+        Entra Connect filters isCriticalSystemObject groups (Domain Admins,
+        Enterprise Admins) by default, but any other privileged group added
+        to sync scope is not filtered automatically. If membership control
+        for a privileged cloud group sits in AD, any on-premises write access
+        to that group grants privileged cloud entitlement with no Entra-side
+        approval or audit trail.
+
+        Detection only. No remediation, no writes — the group's membership
+        source is out of scope for this engine; only the governance gap
+        is surfaced.
+
+    .PARAMETER Rule
+        The ARCH-004 rule object from Rules.json.
+
+    .PARAMETER IdentitySnapshot
+        Output from Get-IdentitySnapshot, New-IdentitySnapshotFromCsv, or Get-UserSnapshot.
+
+    .OUTPUTS
+        List[PSCustomObject] — one ComplianceFinding per privileged synced group.
+    #>
+    [OutputType([System.Collections.Generic.List[PSCustomObject]])]
+    param(
+        [Parameter(Mandatory)] [PSCustomObject] $Rule,
+        [Parameter(Mandatory)] [PSCustomObject] $IdentitySnapshot,
+        [Parameter()] [PSCustomObject] $RulesDocument = $null
+    )
+
+    $findings = [System.Collections.Generic.List[PSCustomObject]]::new()
+
+    foreach ($group in $IdentitySnapshot.Groups) {
+        if ($group.IsPrivileged -and $group.OnPremisesSynced) {
+            $findings.Add((New-ComplianceFinding `
+                -EntityId   $group.GroupId `
+                -EntityType 'Group' `
+                -RuleId     $Rule.id `
+                -Category   $Rule.category `
+                -Severity   $Rule.severity `
+                -Weight     $Rule.weight `
+                -Blocking   $Rule.blocking `
+                -Details    "Privileged group '$($group.DisplayName)' is synced from on-premises AD. Membership is controlled outside Entra governance."))
+        }
+    }
+
+    return $findings
+}
 
 function Evaluate-PrivilegeDrift {
     [OutputType([System.Collections.Generic.List[PSCustomObject]])]
@@ -609,6 +768,31 @@ function Evaluate-PrivilegeDrift {
                     -Weight     $Rule.weight `
                     -Blocking   $Rule.blocking `
                     -Details    "Account holds privileged and standard membership simultaneously. Privileged: $privNames"))
+            }
+            continue
+        }
+
+        # Privileged synced identity — the entitlement is cloud-governed but the
+        # identity object itself is AD-authoritative. Microsoft's own guidance
+        # ("Best practices for Microsoft Entra roles", #9) is explicit: avoid
+        # on-premises synced accounts for Entra role/privileged group
+        # assignments — an on-premises AD compromise becomes a direct path to
+        # privileged cloud access. Detection only — this engine does not
+        # remediate or write to on-premises AD or Entra Connect Sync scope.
+        if ($p.PSObject.Properties['detectSyncedPrivilege'] -and $p.detectSyncedPrivilege) {
+            if ($userPrivGroupIds.Count -gt 0 -and $user.OnPremisesSynced) {
+                $names = ($IdentitySnapshot.Groups |
+                    Where-Object { $userPrivGroupIds -contains $_.GroupId } |
+                    Select-Object -ExpandProperty DisplayName) -join ', '
+                $findings.Add((New-ComplianceFinding `
+                    -EntityId   $user.UserId `
+                    -EntityType 'User' `
+                    -RuleId     $Rule.id `
+                    -Category   $Rule.category `
+                    -Severity   $Rule.severity `
+                    -Weight     $Rule.weight `
+                    -Blocking   $Rule.blocking `
+                    -Details    "Identity is synced from on-premises AD but holds privileged group membership: $names. An on-premises AD compromise directly threatens these cloud entitlements."))
             }
             continue
         }
@@ -819,6 +1003,9 @@ $Script:IdentityDispatch = @{
     'Evaluate-PayloadEntitlementPolicy' = { param($r, $s, $doc) Evaluate-PayloadEntitlementPolicy -Rule $r -IdentitySnapshot $s -RulesDocument $doc }
     'Evaluate-PimEligibility'           = { param($r, $s, $doc) Evaluate-PimEligibility           -Rule $r -IdentitySnapshot $s -RulesDocument $doc }
     'Evaluate-SoDConflict' = { param($r, $s, $doc) Evaluate-SoDConflict -Rule $r -IdentitySnapshot $s -RulesDocument $doc }
+    'Evaluate-OrphanedUsers'  = { param($r, $s, $doc) Evaluate-OrphanedUsers  -Rule $r -IdentitySnapshot $s -RulesDocument $doc }
+    'Evaluate-OrphanedGroups' = { param($r, $s, $doc) Evaluate-OrphanedGroups -Rule $r -IdentitySnapshot $s -RulesDocument $doc }
+    'Evaluate-HybridGroupGovernance' = { param($r, $s, $doc) Evaluate-HybridGroupGovernance -Rule $r -IdentitySnapshot $s -RulesDocument $doc }
 }
 
 

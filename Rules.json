@@ -796,6 +796,20 @@
       "suppressesOnMatch": []
     },
     {
+  "id": "ACCESS-004",
+  "description": "Identity synced from on-premises AD holds membership in a privileged group",
+  "category": "Access",
+  "severity": "High",
+  "weight": 75,
+  "blocking": false,
+  "type": "Evaluate-PrivilegeDrift",
+  "parameters": {
+    "detectSyncedPrivilege": true
+  },
+  "_note": "Microsoft Entra role best practice #9: avoid on-premises synced accounts for privileged assignments. On-premises AD compromise becomes a direct path to privileged cloud access. Detection only — this engine does not remediate or write to on-premises AD.",
+  "suppressesOnMatch": []
+},
+    {
       "id": "ENT-001",
       "description": "Employment type not permitted for assigned group — flagged for review",
       "category": "Access",
@@ -939,6 +953,18 @@
       },
       "suppressesOnMatch": []
     },
+    {
+  "id": "ARCH-004",
+  "description": "Privileged group's membership is controlled by on-premises AD sync rather than Entra governance",
+  "category": "Architecture",
+  "severity": "High",
+  "weight": 75,
+  "blocking": false,
+  "type": "Evaluate-HybridGroupGovernance",
+  "parameters": {},
+  "_note": "Entra Connect filters isCriticalSystemObject groups (Domain Admins, Enterprise Admins) by default, but other privileged groups added to sync scope are not filtered automatically. On-premises write access to a synced privileged group grants cloud entitlement with no Entra-side approval trail.",
+  "suppressesOnMatch": []
+},
     {
       "id": "HYG-001",
       "description": "Account has not signed in for more than 90 days",
@@ -1127,6 +1153,28 @@
     "warnSeverity": "High",
     "warnWeight": 70
   },
+  "suppressesOnMatch": []
+},
+{
+  "id": "HYG-005",
+  "description": "User account holds no group memberships — provisioning may be incomplete or cleanup required",
+  "category": "Hygiene",
+  "severity": "Medium",
+  "weight": 40,
+  "blocking": false,
+  "type": "Evaluate-OrphanedUsers",
+  "parameters": {},
+  "suppressesOnMatch": []
+},
+{
+  "id": "HYG-006",
+  "description": "Group has no members — may be a residual object or misconfigured access path",
+  "category": "Hygiene",
+  "severity": "Low",
+  "weight": 20,
+  "blocking": false,
+  "type": "Evaluate-OrphanedGroups",
+  "parameters": {},
   "suppressesOnMatch": []
 }
   ]
